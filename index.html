@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>세탁물 수량 입력</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 16px;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: white;
+      text-align: center;
+      font-size: 28px;
+      margin-bottom: 16px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .date-section {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .date-label {
+      font-size: 18px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 10px;
+      display: block;
+    }
+    .date-input {
+      width: 100%;
+      padding: 16px;
+      font-size: 20px;
+      border: 3px solid #ddd;
+      border-radius: 12px;
+      text-align: center;
+    }
+    .location-card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .location-header {
+      font-size: 20px;
+      font-weight: bold;
+      color: #764ba2;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+    .item-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .item-box {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+    }
+    .item-name {
+      font-size: 16px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 8px;
+    }
+    .item-price {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+    .qty-control {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .qty-btn {
+      width: 44px;
+      height: 44px;
+      font-size: 24px;
+      font-weight: bold;
+      border: none;
+      border-radius: 50%;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .qty-btn.minus { background: #ff6b6b; }
+    .qty-btn.plus { background: #51cf66; }
+    .qty-btn:active { transform: scale(0.95); }
+    .qty-input {
+      width: 60px;
+      height: 44px;
+      font-size: 22px;
+      font-weight: bold;
+      text-align: center;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+    }
+    .save-btn {
+      width: 100%;
+      padding: 20px;
+      font-size: 24px;
+      font-weight: bold;
+      color: white;
+      background: linear-gradient(135deg, #51cf66 0%, #37b24d 100%);
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 15px rgba(81, 207, 102, 0.4);
+    }
+    .save-btn:active { transform: scale(0.98); }
+    .save-btn:disabled {
+      background: #ccc;
+      box-shadow: none;
+    }
+    .toast {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.9);
+      color: white;
+      padding: 24px 40px;
+      border-radius: 16px;
+      font-size: 22px;
+      display: none;
+      z-index: 1000;
+      text-align: center;
+    }
+    .toast.show { display: block; }
+    .loading {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 999;
+    }
+    .loading.show { display: flex; }
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 6px solid #fff;
+      border-top-color: #51cf66;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📋 세탁물 수량 입력</h1>
+
+    <div class="date-section">
+      <label class="date-label">📅 날짜</label>
+      <input type="date" id="dateInput" class="date-input">
+    </div>
+
+    <div id="locations"></div>
+
+    <button class="save-btn" onclick="saveAll()">✅ 저장하기</button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="loading" id="loading"><div class="spinner"></div></div>
+
+  <script>
+    const SUPABASE_URL = 'https://agqynwvbswolmrktjsbw.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFncXlud3Zic3dvbG1ya3Rqc2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3MTkyMzAsImV4cCI6MjA3OTI5NTIzMH0.JQvmiY0KhHqYUExI3Vjtrr0cSh4-JNWEVk4Wc71VNFo';
+
+    const locations = [
+      'Orly',
+      '스테이모먼트',
+      '연희로4길 25-7, 연남에코리빙',
+      '동대문구 고산자로 508-3',
+      '동대문구 왕산로 200',
+      '송파구 가락로28길',
+      '능동로 165-1 화양프라하임'
+    ];
+
+    const items = [
+      { id: 'blanket', name: '이불', price: '3,000원' },
+      { id: 'mat', name: '매트', price: '2,500원' },
+      { id: 'pillow_cover', name: '베개커버', price: '250원' },
+      { id: 'towel', name: '타올', price: '400원' }
+    ];
+
+    function init() {
+      // 오늘 날짜 설정
+      document.getElementById('dateInput').value = new Date().toISOString().split('T')[0];
+
+      // 숙소별 카드 생성
+      const container = document.getElementById('locations');
+      locations.forEach((loc, idx) => {
+        const card = document.createElement('div');
+        card.className = 'location-card';
+        card.innerHTML = `
+          <div class="location-header">🏠 ${loc}</div>
+          <div class="item-grid">
+            ${items.map(item => `
+              <div class="item-box">
+                <div class="item-name">${item.name}</div>
+                <div class="item-price">${item.price}</div>
+                <div class="qty-control">
+                  <button class="qty-btn minus" onclick="changeQty('${idx}_${item.id}', -1)">−</button>
+                  <input type="number" id="${idx}_${item.id}" class="qty-input" value="0" min="0" inputmode="numeric">
+                  <button class="qty-btn plus" onclick="changeQty('${idx}_${item.id}', 1)">+</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function changeQty(id, delta) {
+      const input = document.getElementById(id);
+      input.value = Math.max(0, (parseInt(input.value) || 0) + delta);
+    }
+
+    function showToast(msg, duration = 2000) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), duration);
+    }
+
+    async function saveAll() {
+      const date = document.getElementById('dateInput').value;
+      if (!date) {
+        showToast('📅 날짜를 선택해주세요');
+        return;
+      }
+
+      // 입력된 데이터 수집
+      const records = [];
+      locations.forEach((loc, idx) => {
+        const blanket = parseInt(document.getElementById(`${idx}_blanket`).value) || 0;
+        const mat = parseInt(document.getElementById(`${idx}_mat`).value) || 0;
+        const pillow_cover = parseInt(document.getElementById(`${idx}_pillow_cover`).value) || 0;
+        const towel = parseInt(document.getElementById(`${idx}_towel`).value) || 0;
+
+        // 수량이 하나라도 있으면 저장
+        if (blanket + mat + pillow_cover + towel > 0) {
+          records.push({
+            record_date: date,
+            location: loc,
+            blanket,
+            mat,
+            pillow_cover,
+            towel
+          });
+        }
+      });
+
+      if (records.length === 0) {
+        showToast('🧺 수량을 입력해주세요');
+        return;
+      }
+
+      // 로딩 표시
+      document.getElementById('loading').classList.add('show');
+
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/laundry_records`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`
+          },
+          body: JSON.stringify(records)
+        });
+
+        if (response.ok) {
+          showToast('✅ 저장 완료!', 2500);
+          // 입력값 초기화
+          locations.forEach((_, idx) => {
+            items.forEach(item => {
+              document.getElementById(`${idx}_${item.id}`).value = 0;
+            });
+          });
+        } else {
+          throw new Error('저장 실패');
+        }
+      } catch (error) {
+        showToast('❌ 저장 실패. 다시 시도해주세요.');
+        console.error(error);
+      } finally {
+        document.getElementById('loading').classList.remove('show');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
