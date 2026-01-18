@@ -936,6 +936,14 @@
             <button class="modal-qty-btn plus" onclick="changeEditQty('editTowel', 1)">+</button>
           </div>
         </div>
+        <div class="modal-row">
+          <span class="modal-label">바디타올</span>
+          <div class="modal-qty">
+            <button class="modal-qty-btn minus" onclick="changeEditQty('editBodyTowel', -1)">−</button>
+            <input type="number" id="editBodyTowel" class="modal-qty-input" value="0">
+            <button class="modal-qty-btn plus" onclick="changeEditQty('editBodyTowel', 1)">+</button>
+          </div>
+        </div>
       </div>
       <div class="modal-buttons">
         <button class="modal-btn cancel" onclick="closeEditModal()">취소</button>
@@ -983,7 +991,8 @@
       { id: 'blanket', name: '이불', icon: 'bed' },
       { id: 'mat', name: '매트', icon: 'square' },
       { id: 'pillow_cover', name: '베개커버', icon: 'nights_stay' },
-      { id: 'towel', name: '타올', icon: 'dry_cleaning' }
+      { id: 'towel', name: '타올', icon: 'dry_cleaning' },
+      { id: 'body_towel', name: '바디타올', icon: 'shower' }
     ];
 
     let editingId = null;
@@ -1095,9 +1104,10 @@
         const mat = parseInt(document.getElementById(`${idx}_mat`).value) || 0;
         const pillow_cover = parseInt(document.getElementById(`${idx}_pillow_cover`).value) || 0;
         const towel = parseInt(document.getElementById(`${idx}_towel`).value) || 0;
+        const body_towel = parseInt(document.getElementById(`${idx}_body_towel`).value) || 0;
 
-        if (blanket + mat + pillow_cover + towel > 0) {
-          records.push({ record_date: date, location: loc, blanket, mat, pillow_cover, towel });
+        if (blanket + mat + pillow_cover + towel + body_towel > 0) {
+          records.push({ record_date: date, location: loc, blanket, mat, pillow_cover, towel, body_towel });
         }
       });
 
@@ -1199,9 +1209,10 @@
               ${r.mat > 0 ? `<div class="record-item">매트 <span class="count">${r.mat}</span></div>` : ''}
               ${r.pillow_cover > 0 ? `<div class="record-item">베개커버 <span class="count">${r.pillow_cover}</span></div>` : ''}
               ${r.towel > 0 ? `<div class="record-item">타올 <span class="count">${r.towel}</span></div>` : ''}
+              ${r.body_towel > 0 ? `<div class="record-item">바디타올 <span class="count">${r.body_towel}</span></div>` : ''}
             </div>
             <div class="record-actions">
-              <button class="action-btn edit" onclick="openEditModal(${r.id}, '${r.record_date}', '${r.location}', ${r.blanket}, ${r.mat}, ${r.pillow_cover}, ${r.towel})">
+              <button class="action-btn edit" onclick="openEditModal(${r.id}, '${r.record_date}', '${r.location}', ${r.blanket}, ${r.mat}, ${r.pillow_cover}, ${r.towel}, ${r.body_towel || 0})">
                 <span class="material-icons-round">edit</span>
                 수정
               </button>
@@ -1215,11 +1226,12 @@
       `).join('');
     }
 
-    function openEditModal(id, date, location, blanket, mat, pillow, towel) {
+    function openEditModal(id, date, location, blanket, mat, pillow, towel, bodyTowel) {
       editingId = id;
       document.getElementById('editDate').value = date;
       document.getElementById('editLocation').value = location;
       document.getElementById('editBlanket').value = blanket;
+      document.getElementById('editBodyTowel').value = bodyTowel || 0;
       document.getElementById('editMat').value = mat;
       document.getElementById('editPillow').value = pillow;
       document.getElementById('editTowel').value = towel;
@@ -1242,7 +1254,8 @@
         blanket: parseInt(document.getElementById('editBlanket').value) || 0,
         mat: parseInt(document.getElementById('editMat').value) || 0,
         pillow_cover: parseInt(document.getElementById('editPillow').value) || 0,
-        towel: parseInt(document.getElementById('editTowel').value) || 0
+        towel: parseInt(document.getElementById('editTowel').value) || 0,
+        body_towel: parseInt(document.getElementById('editBodyTowel').value) || 0
       };
 
       document.getElementById('loading').classList.add('show');
