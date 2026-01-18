@@ -4,18 +4,36 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>세탁물 수량</title>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
   <style>
     :root {
-      --primary: #1a73e8;
-      --primary-light: #e8f0fe;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --primary-light: #dbeafe;
+      --primary-gradient: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
       --surface: #ffffff;
-      --background: #f8f9fa;
-      --on-surface: #202124;
-      --on-surface-variant: #5f6368;
-      --outline: #dadce0;
-      --error: #d93025;
-      --success: #1e8e3e;
+      --background: #f1f5f9;
+      --on-surface: #0f172a;
+      --on-surface-secondary: #475569;
+      --on-surface-tertiary: #94a3b8;
+      --outline: #e2e8f0;
+      --outline-light: #f1f5f9;
+      --error: #dc2626;
+      --error-light: #fef2f2;
+      --success: #16a34a;
+      --success-light: #f0fdf4;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 6px rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.06);
+      --shadow-lg: 0 10px 15px rgba(0,0,0,0.06), 0 4px 6px rgba(0,0,0,0.04);
+      --shadow-xl: 0 20px 25px rgba(0,0,0,0.08), 0 10px 10px rgba(0,0,0,0.04);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-slow: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     * {
@@ -25,295 +43,486 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    body {
-      font-family: 'Noto Sans KR', -apple-system, sans-serif;
-      background: var(--background);
-      min-height: 100vh;
-      color: var(--on-surface);
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--background);
+      min-height: 100vh;
+      min-height: 100dvh;
+      color: var(--on-surface);
+      line-height: 1.5;
+      letter-spacing: -0.01em;
+    }
+
+    body.modal-open {
+      overflow: hidden;
+    }
+
+    /* Header */
     .header {
       background: var(--surface);
-      padding: 20px 16px;
+      padding: 16px 20px;
       position: sticky;
       top: 0;
       z-index: 100;
       border-bottom: 1px solid var(--outline);
+      backdrop-filter: blur(10px);
+      background: rgba(255,255,255,0.9);
     }
 
     .header h1 {
-      font-size: 22px;
-      font-weight: 500;
+      font-size: 20px;
+      font-weight: 700;
       color: var(--on-surface);
       text-align: center;
+      letter-spacing: -0.02em;
     }
 
+    /* Tabs */
     .tab-container {
       display: flex;
       background: var(--surface);
+      padding: 8px;
+      gap: 4px;
       border-bottom: 1px solid var(--outline);
     }
 
     .tab {
       flex: 1;
-      padding: 14px;
+      padding: 12px 16px;
       text-align: center;
-      font-size: 15px;
-      font-weight: 500;
-      color: var(--on-surface-variant);
-      background: none;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--on-surface-secondary);
+      background: transparent;
       border: none;
+      border-radius: var(--radius-md);
       cursor: pointer;
-      border-bottom: 2px solid transparent;
+      transition: all var(--transition-fast);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .tab .material-icons-round {
+      font-size: 18px;
+    }
+
+    .tab:active {
+      transform: scale(0.98);
     }
 
     .tab.active {
       color: var(--primary);
-      border-bottom-color: var(--primary);
+      background: var(--primary-light);
     }
 
+    /* Content */
     .content {
       padding: 16px;
       padding-bottom: 100px;
     }
 
-    .date-card {
+    /* Cards */
+    .card {
       background: var(--surface);
-      border-radius: 16px;
+      border-radius: var(--radius-lg);
       padding: 20px;
-      margin-bottom: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    }
-
-    .date-label {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--on-surface-variant);
       margin-bottom: 12px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--outline-light);
+      transition: all var(--transition-fast);
     }
 
+    .card:active {
+      transform: scale(0.995);
+    }
+
+    .card-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--on-surface-secondary);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    /* Date Input */
     .date-input {
       width: 100%;
-      padding: 16px;
-      font-size: 18px;
+      padding: 14px 16px;
+      font-size: 16px;
+      font-weight: 500;
       font-family: inherit;
       border: 2px solid var(--outline);
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       background: var(--surface);
       color: var(--on-surface);
       text-align: center;
+      transition: all var(--transition-fast);
+      cursor: pointer;
     }
 
     .date-input:focus {
       outline: none;
       border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-light);
     }
 
+    .date-range {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .date-range .date-input {
+      flex: 1;
+    }
+
+    .date-range-divider {
+      color: var(--on-surface-tertiary);
+      font-weight: 500;
+    }
+
+    /* Location Card */
     .location-card {
       background: var(--surface);
-      border-radius: 16px;
+      border-radius: var(--radius-lg);
       margin-bottom: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--outline-light);
       overflow: hidden;
+      transition: all var(--transition-fast);
     }
 
     .location-header {
       padding: 16px 20px;
-      background: var(--primary-light);
-      border-bottom: 1px solid var(--outline);
+      background: linear-gradient(135deg, var(--primary-light) 0%, #ede9fe 100%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
-    .location-name {
-      font-size: 16px;
-      font-weight: 700;
+    .location-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--surface);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .location-icon .material-icons-round {
+      font-size: 20px;
       color: var(--primary);
     }
 
+    .location-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--on-surface);
+      flex: 1;
+    }
+
     .items-container {
-      padding: 16px;
+      padding: 8px 16px;
     }
 
     .item-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--outline);
+      padding: 14px 4px;
+      border-bottom: 1px solid var(--outline-light);
     }
 
     .item-row:last-child {
       border-bottom: none;
     }
 
-    .item-name {
-      font-size: 16px;
-      font-weight: 500;
-      color: var(--on-surface);
-      flex: 1;
+    .item-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
+    .item-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--background);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .item-icon .material-icons-round {
+      font-size: 18px;
+      color: var(--on-surface-secondary);
+    }
+
+    .item-name {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--on-surface);
+    }
+
+    /* Quantity Control */
     .qty-control {
       display: flex;
       align-items: center;
       gap: 4px;
+      background: var(--background);
+      border-radius: var(--radius-md);
+      padding: 4px;
     }
 
     .qty-btn {
-      width: 48px;
-      height: 48px;
+      width: 40px;
+      height: 40px;
       border: none;
-      border-radius: 50%;
-      font-size: 24px;
+      border-radius: var(--radius-sm);
+      font-size: 20px;
       font-weight: 500;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.2s;
+      transition: all var(--transition-fast);
+    }
+
+    .qty-btn .material-icons-round {
+      font-size: 22px;
     }
 
     .qty-btn.minus {
-      background: #fce8e6;
+      background: var(--surface);
       color: var(--error);
     }
 
+    .qty-btn.minus:active {
+      background: var(--error-light);
+    }
+
     .qty-btn.plus {
-      background: #e6f4ea;
+      background: var(--surface);
       color: var(--success);
     }
 
-    .qty-btn:active {
-      transform: scale(0.95);
+    .qty-btn.plus:active {
+      background: var(--success-light);
     }
 
     .qty-input {
-      width: 56px;
-      height: 48px;
-      font-size: 20px;
+      width: 48px;
+      height: 40px;
+      font-size: 17px;
       font-weight: 700;
       font-family: inherit;
       text-align: center;
-      border: 2px solid var(--outline);
-      border-radius: 12px;
-      background: var(--surface);
+      border: none;
+      background: transparent;
       color: var(--on-surface);
     }
 
     .qty-input:focus {
       outline: none;
-      border-color: var(--primary);
     }
 
+    /* Save Button */
     .save-container {
       position: fixed;
       bottom: 0;
       left: 0;
       right: 0;
       padding: 16px;
-      background: var(--surface);
-      border-top: 1px solid var(--outline);
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+      background: linear-gradient(to top, var(--surface) 80%, transparent);
     }
 
     .save-btn {
       width: 100%;
-      padding: 18px;
-      font-size: 18px;
+      padding: 16px 24px;
+      font-size: 16px;
       font-weight: 700;
       font-family: inherit;
       color: white;
-      background: var(--primary);
+      background: var(--primary-gradient);
       border: none;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all var(--transition-fast);
+      box-shadow: var(--shadow-md), 0 4px 14px rgba(37, 99, 235, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .save-btn .material-icons-round {
+      font-size: 20px;
     }
 
     .save-btn:active {
-      background: #1557b0;
+      transform: scale(0.98);
+      box-shadow: var(--shadow-sm);
     }
 
     .save-btn:disabled {
       background: var(--outline);
-      color: var(--on-surface-variant);
+      color: var(--on-surface-tertiary);
+      box-shadow: none;
     }
 
+    /* Toast */
     .toast {
       position: fixed;
       bottom: 100px;
       left: 16px;
       right: 16px;
-      background: #323232;
+      background: var(--on-surface);
       color: white;
       padding: 16px 20px;
-      border-radius: 12px;
-      font-size: 16px;
+      border-radius: var(--radius-md);
+      font-size: 15px;
+      font-weight: 500;
       text-align: center;
-      display: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      opacity: 0;
+      transform: translateY(20px);
+      pointer-events: none;
+      transition: all var(--transition-normal);
       z-index: 1000;
-      animation: slideUp 0.3s ease;
+      box-shadow: var(--shadow-xl);
     }
 
-    .toast.show { display: block; }
-    .toast.success { background: var(--success); }
-    .toast.error { background: var(--error); }
-
-    @keyframes slideUp {
-      from { transform: translateY(20px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
+    .toast .material-icons-round {
+      font-size: 20px;
     }
 
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .toast.success {
+      background: var(--success);
+    }
+
+    .toast.error {
+      background: var(--error);
+    }
+
+    /* Loading */
     .loading {
-      display: none;
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(255,255,255,0.9);
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(4px);
+      display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
+      gap: 16px;
       z-index: 999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition-fast);
     }
 
-    .loading.show { display: flex; }
+    .loading.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
 
     .spinner {
-      width: 48px;
-      height: 48px;
-      border: 4px solid var(--outline);
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--outline);
       border-top-color: var(--primary);
       border-radius: 50%;
-      animation: spin 1s linear infinite;
+      animation: spin 0.8s linear infinite;
     }
 
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--on-surface-secondary);
+    }
 
-    /* 내역 페이지 스타일 */
-    .page { display: none; }
-    .page.active { display: block; }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
 
+    /* Pages */
+    .page {
+      display: none;
+    }
+
+    .page.active {
+      display: block;
+      animation: fadeIn var(--transition-normal);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* Record Card */
     .record-card {
       background: var(--surface);
-      border-radius: 16px;
+      border-radius: var(--radius-lg);
       margin-bottom: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--outline-light);
       overflow: hidden;
+      transition: all var(--transition-fast);
     }
 
     .record-header {
       padding: 16px 20px;
-      background: var(--primary-light);
+      background: linear-gradient(135deg, var(--background) 0%, #f8fafc 100%);
+      border-bottom: 1px solid var(--outline-light);
+    }
+
+    .record-meta {
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
     }
 
     .record-date {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
-      color: var(--primary);
+      color: var(--on-surface);
     }
 
     .record-location {
+      font-size: 13px;
+      color: var(--on-surface-secondary);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .record-location .material-icons-round {
       font-size: 14px;
-      color: var(--on-surface-variant);
     }
 
     .record-body {
@@ -323,18 +532,23 @@
     .record-items {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 8px;
       margin-bottom: 16px;
     }
 
     .record-item {
       background: var(--background);
-      padding: 8px 14px;
-      border-radius: 8px;
-      font-size: 14px;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--on-surface-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
-    .record-item span {
+    .record-item .count {
       font-weight: 700;
       color: var(--primary);
     }
@@ -346,13 +560,22 @@
 
     .action-btn {
       flex: 1;
-      padding: 12px;
+      padding: 12px 16px;
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 600;
       font-family: inherit;
       border: none;
-      border-radius: 8px;
+      border-radius: var(--radius-sm);
       cursor: pointer;
+      transition: all var(--transition-fast);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .action-btn .material-icons-round {
+      font-size: 18px;
     }
 
     .action-btn.edit {
@@ -360,42 +583,99 @@
       color: var(--primary);
     }
 
+    .action-btn.edit:active {
+      background: #bfdbfe;
+    }
+
     .action-btn.delete {
-      background: #fce8e6;
+      background: var(--error-light);
       color: var(--error);
     }
 
+    .action-btn.delete:active {
+      background: #fee2e2;
+    }
+
+    /* Empty State */
     .empty-state {
       text-align: center;
-      padding: 60px 20px;
-      color: var(--on-surface-variant);
+      padding: 60px 24px;
     }
 
-    .empty-state-icon {
-      font-size: 48px;
-      margin-bottom: 16px;
-    }
-
-    /* 모달 */
-    .modal {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.5);
-      z-index: 1001;
-      justify-content: center;
+    .empty-icon {
+      width: 80px;
+      height: 80px;
+      background: var(--background);
+      border-radius: 50%;
+      display: flex;
       align-items: center;
-      padding: 20px;
+      justify-content: center;
+      margin: 0 auto 20px;
     }
 
-    .modal.show { display: flex; }
+    .empty-icon .material-icons-round {
+      font-size: 36px;
+      color: var(--on-surface-tertiary);
+    }
+
+    .empty-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--on-surface);
+      margin-bottom: 8px;
+    }
+
+    .empty-desc {
+      font-size: 14px;
+      color: var(--on-surface-secondary);
+    }
+
+    /* Modal */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.5);
+      backdrop-filter: blur(4px);
+      z-index: 1001;
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      padding: 16px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition-normal);
+    }
+
+    .modal.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
 
     .modal-content {
       background: var(--surface);
-      border-radius: 20px;
+      border-radius: var(--radius-xl) var(--radius-xl) var(--radius-lg) var(--radius-lg);
       padding: 24px;
       width: 100%;
       max-width: 400px;
+      max-height: 85vh;
+      overflow-y: auto;
+      transform: translateY(100%);
+      transition: transform var(--transition-slow);
+    }
+
+    .modal.show .modal-content {
+      transform: translateY(0);
+    }
+
+    .modal-handle {
+      width: 36px;
+      height: 4px;
+      background: var(--outline);
+      border-radius: 2px;
+      margin: 0 auto 20px;
     }
 
     .modal-title {
@@ -403,72 +683,96 @@
       font-weight: 700;
       margin-bottom: 20px;
       text-align: center;
+      color: var(--on-surface);
     }
 
     .modal-body {
-      margin-bottom: 20px;
+      margin-bottom: 24px;
     }
 
     .modal-input {
       width: 100%;
-      padding: 14px;
-      font-size: 16px;
+      padding: 14px 16px;
+      font-size: 15px;
+      font-weight: 500;
       font-family: inherit;
       border: 2px solid var(--outline);
-      border-radius: 10px;
+      border-radius: var(--radius-md);
       margin-bottom: 12px;
+      transition: all var(--transition-fast);
+      background: var(--surface);
+      color: var(--on-surface);
     }
 
     .modal-input:focus {
       outline: none;
       border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-light);
     }
 
     .modal-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 0;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--outline-light);
+    }
+
+    .modal-row:last-of-type {
+      border-bottom: none;
     }
 
     .modal-label {
       font-size: 15px;
+      font-weight: 500;
       color: var(--on-surface);
     }
 
     .modal-qty {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 4px;
+      background: var(--background);
+      border-radius: var(--radius-sm);
+      padding: 4px;
     }
 
     .modal-qty-btn {
-      width: 36px;
-      height: 36px;
+      width: 32px;
+      height: 32px;
       border: none;
-      border-radius: 50%;
-      font-size: 18px;
+      border-radius: 6px;
+      font-size: 16px;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition-fast);
+      background: var(--surface);
     }
 
     .modal-qty-btn.minus {
-      background: #fce8e6;
       color: var(--error);
     }
 
     .modal-qty-btn.plus {
-      background: #e6f4ea;
       color: var(--success);
     }
 
     .modal-qty-input {
-      width: 50px;
-      height: 36px;
+      width: 44px;
+      height: 32px;
       text-align: center;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
-      border: 2px solid var(--outline);
-      border-radius: 8px;
+      font-family: inherit;
+      border: none;
+      background: transparent;
+      color: var(--on-surface);
+    }
+
+    .modal-qty-input:focus {
+      outline: none;
     }
 
     .modal-buttons {
@@ -478,28 +782,59 @@
 
     .modal-btn {
       flex: 1;
-      padding: 14px;
-      font-size: 16px;
+      padding: 14px 20px;
+      font-size: 15px;
       font-weight: 600;
       font-family: inherit;
       border: none;
-      border-radius: 10px;
+      border-radius: var(--radius-md);
       cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .modal-btn:active {
+      transform: scale(0.98);
     }
 
     .modal-btn.cancel {
       background: var(--background);
-      color: var(--on-surface-variant);
+      color: var(--on-surface-secondary);
     }
 
     .modal-btn.confirm {
-      background: var(--primary);
+      background: var(--primary-gradient);
       color: white;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
     }
 
     .modal-btn.danger {
       background: var(--error);
       color: white;
+      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+    }
+
+    /* Delete Modal */
+    .delete-modal-icon {
+      width: 64px;
+      height: 64px;
+      background: var(--error-light);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+    }
+
+    .delete-modal-icon .material-icons-round {
+      font-size: 32px;
+      color: var(--error);
+    }
+
+    .delete-modal-text {
+      text-align: center;
+      font-size: 15px;
+      color: var(--on-surface-secondary);
+      line-height: 1.6;
     }
   </style>
 </head>
@@ -509,46 +844,63 @@
   </div>
 
   <div class="tab-container">
-    <button class="tab active" onclick="showPage('input')">입력</button>
-    <button class="tab" onclick="showPage('history')">내역</button>
+    <button class="tab active" onclick="showPage('input')">
+      <span class="material-icons-round">edit_note</span>
+      입력
+    </button>
+    <button class="tab" onclick="showPage('history')">
+      <span class="material-icons-round">history</span>
+      내역
+    </button>
   </div>
 
-  <!-- 입력 페이지 -->
+  <!-- Input Page -->
   <div id="inputPage" class="page active">
     <div class="content">
-      <div class="date-card">
-        <div class="date-label">날짜 선택</div>
+      <div class="card">
+        <div class="card-label">날짜 선택</div>
         <input type="date" id="dateInput" class="date-input">
       </div>
       <div id="locations"></div>
     </div>
     <div class="save-container">
-      <button class="save-btn" onclick="saveAll()">저장하기</button>
+      <button class="save-btn" onclick="saveAll()">
+        <span class="material-icons-round">check_circle</span>
+        저장하기
+      </button>
     </div>
   </div>
 
-  <!-- 내역 페이지 -->
+  <!-- History Page -->
   <div id="historyPage" class="page">
     <div class="content">
-      <div class="date-card">
-        <div class="date-label">조회 기간</div>
-        <div style="display: flex; gap: 10px; align-items: center;">
-          <input type="date" id="startDate" class="date-input" style="flex:1">
-          <span>~</span>
-          <input type="date" id="endDate" class="date-input" style="flex:1">
+      <div class="card">
+        <div class="card-label">조회 기간</div>
+        <div class="date-range">
+          <input type="date" id="startDate" class="date-input">
+          <span class="date-range-divider">~</span>
+          <input type="date" id="endDate" class="date-input">
         </div>
       </div>
       <div id="records"></div>
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
-  <div class="loading" id="loading"><div class="spinner"></div></div>
+  <div class="toast" id="toast">
+    <span class="material-icons-round" id="toastIcon">check_circle</span>
+    <span id="toastText"></span>
+  </div>
 
-  <!-- 수정 모달 -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <span class="loading-text">처리 중...</span>
+  </div>
+
+  <!-- Edit Modal -->
   <div class="modal" id="editModal">
     <div class="modal-content">
-      <div class="modal-title">수정</div>
+      <div class="modal-handle"></div>
+      <div class="modal-title">기록 수정</div>
       <div class="modal-body">
         <input type="date" id="editDate" class="modal-input">
         <select id="editLocation" class="modal-input"></select>
@@ -592,12 +944,18 @@
     </div>
   </div>
 
-  <!-- 삭제 확인 모달 -->
+  <!-- Delete Modal -->
   <div class="modal" id="deleteModal">
     <div class="modal-content">
-      <div class="modal-title">삭제 확인</div>
-      <div class="modal-body" style="text-align: center; color: var(--on-surface-variant);">
-        이 기록을 삭제하시겠습니까?
+      <div class="modal-handle"></div>
+      <div class="modal-body" style="padding-top: 8px;">
+        <div class="delete-modal-icon">
+          <span class="material-icons-round">delete_outline</span>
+        </div>
+        <div class="delete-modal-text">
+          이 기록을 삭제하시겠습니까?<br>
+          <span style="font-size: 13px; color: var(--on-surface-tertiary);">삭제된 기록은 복구할 수 없습니다</span>
+        </div>
       </div>
       <div class="modal-buttons">
         <button class="modal-btn cancel" onclick="closeDeleteModal()">취소</button>
@@ -622,10 +980,10 @@
     ];
 
     const items = [
-      { id: 'blanket', name: '이불' },
-      { id: 'mat', name: '매트' },
-      { id: 'pillow_cover', name: '베개커버' },
-      { id: 'towel', name: '타올' }
+      { id: 'blanket', name: '이불', icon: 'bed' },
+      { id: 'mat', name: '매트', icon: 'square' },
+      { id: 'pillow_cover', name: '베개커버', icon: 'nights_stay' },
+      { id: 'towel', name: '타올', icon: 'dry_cleaning' }
     ];
 
     let editingId = null;
@@ -635,29 +993,39 @@
       const today = new Date().toISOString().split('T')[0];
       document.getElementById('dateInput').value = today;
 
-      // 내역 조회 기간 기본값 (최근 7일)
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
       document.getElementById('startDate').value = weekAgo.toISOString().split('T')[0];
       document.getElementById('endDate').value = today;
 
-      // 입력 폼 생성
       const container = document.getElementById('locations');
       locations.forEach((loc, idx) => {
         const card = document.createElement('div');
         card.className = 'location-card';
         card.innerHTML = `
           <div class="location-header">
+            <div class="location-icon">
+              <span class="material-icons-round">apartment</span>
+            </div>
             <div class="location-name">${loc}</div>
           </div>
           <div class="items-container">
             ${items.map(item => `
               <div class="item-row">
-                <div class="item-name">${item.name}</div>
+                <div class="item-info">
+                  <div class="item-icon">
+                    <span class="material-icons-round">${item.icon}</span>
+                  </div>
+                  <div class="item-name">${item.name}</div>
+                </div>
                 <div class="qty-control">
-                  <button class="qty-btn minus" onclick="changeQty('${idx}_${item.id}', -1)">−</button>
+                  <button class="qty-btn minus" onclick="changeQty('${idx}_${item.id}', -1)">
+                    <span class="material-icons-round">remove</span>
+                  </button>
                   <input type="number" id="${idx}_${item.id}" class="qty-input" value="0" min="0" inputmode="numeric">
-                  <button class="qty-btn plus" onclick="changeQty('${idx}_${item.id}', 1)">+</button>
+                  <button class="qty-btn plus" onclick="changeQty('${idx}_${item.id}', 1)">
+                    <span class="material-icons-round">add</span>
+                  </button>
                 </div>
               </div>
             `).join('')}
@@ -666,7 +1034,6 @@
         container.appendChild(card);
       });
 
-      // 수정 모달 숙소 선택
       const editLocationSelect = document.getElementById('editLocation');
       locations.forEach(loc => {
         const option = document.createElement('option');
@@ -675,7 +1042,6 @@
         editLocationSelect.appendChild(option);
       });
 
-      // 날짜 변경 시 내역 조회
       document.getElementById('startDate').addEventListener('change', loadRecords);
       document.getElementById('endDate').addEventListener('change', loadRecords);
     }
@@ -706,8 +1072,13 @@
 
     function showToast(msg, type = '') {
       const toast = document.getElementById('toast');
-      toast.textContent = msg;
+      const icon = document.getElementById('toastIcon');
+      const text = document.getElementById('toastText');
+
+      text.textContent = msg;
+      icon.textContent = type === 'error' ? 'error' : 'check_circle';
       toast.className = 'toast show ' + type;
+
       setTimeout(() => toast.classList.remove('show'), 2500);
     }
 
@@ -801,8 +1172,11 @@
       if (records.length === 0) {
         container.innerHTML = `
           <div class="empty-state">
-            <div class="empty-state-icon">📋</div>
-            <p>기록이 없습니다</p>
+            <div class="empty-icon">
+              <span class="material-icons-round">inbox</span>
+            </div>
+            <div class="empty-title">기록이 없습니다</div>
+            <div class="empty-desc">선택한 기간에 저장된 기록이 없어요</div>
           </div>
         `;
         return;
@@ -811,21 +1185,30 @@
       container.innerHTML = records.map(r => `
         <div class="record-card">
           <div class="record-header">
-            <div>
-              <div class="record-date">${r.record_date}</div>
-              <div class="record-location">${r.location}</div>
+            <div class="record-meta">
+              <span class="record-date">${r.record_date}</span>
+            </div>
+            <div class="record-location">
+              <span class="material-icons-round">location_on</span>
+              ${r.location}
             </div>
           </div>
           <div class="record-body">
             <div class="record-items">
-              ${r.blanket > 0 ? `<div class="record-item">이불 <span>${r.blanket}</span></div>` : ''}
-              ${r.mat > 0 ? `<div class="record-item">매트 <span>${r.mat}</span></div>` : ''}
-              ${r.pillow_cover > 0 ? `<div class="record-item">베개커버 <span>${r.pillow_cover}</span></div>` : ''}
-              ${r.towel > 0 ? `<div class="record-item">타올 <span>${r.towel}</span></div>` : ''}
+              ${r.blanket > 0 ? `<div class="record-item">이불 <span class="count">${r.blanket}</span></div>` : ''}
+              ${r.mat > 0 ? `<div class="record-item">매트 <span class="count">${r.mat}</span></div>` : ''}
+              ${r.pillow_cover > 0 ? `<div class="record-item">베개커버 <span class="count">${r.pillow_cover}</span></div>` : ''}
+              ${r.towel > 0 ? `<div class="record-item">타올 <span class="count">${r.towel}</span></div>` : ''}
             </div>
             <div class="record-actions">
-              <button class="action-btn edit" onclick="openEditModal(${r.id}, '${r.record_date}', '${r.location}', ${r.blanket}, ${r.mat}, ${r.pillow_cover}, ${r.towel})">수정</button>
-              <button class="action-btn delete" onclick="openDeleteModal(${r.id})">삭제</button>
+              <button class="action-btn edit" onclick="openEditModal(${r.id}, '${r.record_date}', '${r.location}', ${r.blanket}, ${r.mat}, ${r.pillow_cover}, ${r.towel})">
+                <span class="material-icons-round">edit</span>
+                수정
+              </button>
+              <button class="action-btn delete" onclick="openDeleteModal(${r.id})">
+                <span class="material-icons-round">delete_outline</span>
+                삭제
+              </button>
             </div>
           </div>
         </div>
@@ -841,10 +1224,12 @@
       document.getElementById('editPillow').value = pillow;
       document.getElementById('editTowel').value = towel;
       document.getElementById('editModal').classList.add('show');
+      document.body.classList.add('modal-open');
     }
 
     function closeEditModal() {
       document.getElementById('editModal').classList.remove('show');
+      document.body.classList.remove('modal-open');
       editingId = null;
     }
 
@@ -891,10 +1276,12 @@
     function openDeleteModal(id) {
       deletingId = id;
       document.getElementById('deleteModal').classList.add('show');
+      document.body.classList.add('modal-open');
     }
 
     function closeDeleteModal() {
       document.getElementById('deleteModal').classList.remove('show');
+      document.body.classList.remove('modal-open');
       deletingId = null;
     }
 
@@ -926,6 +1313,15 @@
         document.getElementById('loading').classList.remove('show');
       }
     }
+
+    // Close modal on backdrop click
+    document.getElementById('editModal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeEditModal();
+    });
+
+    document.getElementById('deleteModal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeDeleteModal();
+    });
 
     init();
   </script>
