@@ -32,7 +32,6 @@
       color: var(--on-surface);
     }
 
-    /* 헤더 */
     .header {
       background: var(--surface);
       padding: 20px 16px;
@@ -49,12 +48,35 @@
       text-align: center;
     }
 
+    .tab-container {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--outline);
+    }
+
+    .tab {
+      flex: 1;
+      padding: 14px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--on-surface-variant);
+      background: none;
+      border: none;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+
+    .tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
     .content {
       padding: 16px;
       padding-bottom: 100px;
     }
 
-    /* 날짜 선택 */
     .date-card {
       background: var(--surface);
       border-radius: 16px;
@@ -87,7 +109,6 @@
       border-color: var(--primary);
     }
 
-    /* 숙소 카드 */
     .location-card {
       background: var(--surface);
       border-radius: 16px;
@@ -131,7 +152,6 @@
       flex: 1;
     }
 
-    /* 수량 컨트롤 */
     .qty-control {
       display: flex;
       align-items: center;
@@ -184,7 +204,6 @@
       border-color: var(--primary);
     }
 
-    /* 저장 버튼 */
     .save-container {
       position: fixed;
       bottom: 0;
@@ -218,7 +237,6 @@
       color: var(--on-surface-variant);
     }
 
-    /* 토스트 */
     .toast {
       position: fixed;
       bottom: 100px;
@@ -236,7 +254,6 @@
     }
 
     .toast.show { display: block; }
-
     .toast.success { background: var(--success); }
     .toast.error { background: var(--error); }
 
@@ -245,7 +262,6 @@
       to { transform: translateY(0); opacity: 1; }
     }
 
-    /* 로딩 */
     .loading {
       display: none;
       position: fixed;
@@ -268,28 +284,327 @@
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 내역 페이지 스타일 */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    .record-card {
+      background: var(--surface);
+      border-radius: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+
+    .record-header {
+      padding: 16px 20px;
+      background: var(--primary-light);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .record-date {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .record-location {
+      font-size: 14px;
+      color: var(--on-surface-variant);
+    }
+
+    .record-body {
+      padding: 16px 20px;
+    }
+
+    .record-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .record-item {
+      background: var(--background);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .record-item span {
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .record-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .action-btn.edit {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+
+    .action-btn.delete {
+      background: #fce8e6;
+      color: var(--error);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--on-surface-variant);
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    /* 모달 */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1001;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .modal.show { display: flex; }
+
+    .modal-content {
+      background: var(--surface);
+      border-radius: 20px;
+      padding: 24px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .modal-body {
+      margin-bottom: 20px;
+    }
+
+    .modal-input {
+      width: 100%;
+      padding: 14px;
+      font-size: 16px;
+      font-family: inherit;
+      border: 2px solid var(--outline);
+      border-radius: 10px;
+      margin-bottom: 12px;
+    }
+
+    .modal-input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .modal-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+    }
+
+    .modal-label {
+      font-size: 15px;
+      color: var(--on-surface);
+    }
+
+    .modal-qty {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .modal-qty-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 50%;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .modal-qty-btn.minus {
+      background: #fce8e6;
+      color: var(--error);
+    }
+
+    .modal-qty-btn.plus {
+      background: #e6f4ea;
+      color: var(--success);
+    }
+
+    .modal-qty-input {
+      width: 50px;
+      height: 36px;
+      text-align: center;
+      font-size: 16px;
+      font-weight: 700;
+      border: 2px solid var(--outline);
+      border-radius: 8px;
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 12px;
+    }
+
+    .modal-btn {
+      flex: 1;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 600;
+      font-family: inherit;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .modal-btn.cancel {
+      background: var(--background);
+      color: var(--on-surface-variant);
+    }
+
+    .modal-btn.confirm {
+      background: var(--primary);
+      color: white;
+    }
+
+    .modal-btn.danger {
+      background: var(--error);
+      color: white;
+    }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>세탁물 수량 입력</h1>
+    <h1>세탁물 수량</h1>
   </div>
 
-  <div class="content">
-    <div class="date-card">
-      <div class="date-label">날짜 선택</div>
-      <input type="date" id="dateInput" class="date-input">
+  <div class="tab-container">
+    <button class="tab active" onclick="showPage('input')">입력</button>
+    <button class="tab" onclick="showPage('history')">내역</button>
+  </div>
+
+  <!-- 입력 페이지 -->
+  <div id="inputPage" class="page active">
+    <div class="content">
+      <div class="date-card">
+        <div class="date-label">날짜 선택</div>
+        <input type="date" id="dateInput" class="date-input">
+      </div>
+      <div id="locations"></div>
     </div>
-
-    <div id="locations"></div>
+    <div class="save-container">
+      <button class="save-btn" onclick="saveAll()">저장하기</button>
+    </div>
   </div>
 
-  <div class="save-container">
-    <button class="save-btn" onclick="saveAll()">저장하기</button>
+  <!-- 내역 페이지 -->
+  <div id="historyPage" class="page">
+    <div class="content">
+      <div class="date-card">
+        <div class="date-label">조회 기간</div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <input type="date" id="startDate" class="date-input" style="flex:1">
+          <span>~</span>
+          <input type="date" id="endDate" class="date-input" style="flex:1">
+        </div>
+      </div>
+      <div id="records"></div>
+    </div>
   </div>
 
   <div class="toast" id="toast"></div>
   <div class="loading" id="loading"><div class="spinner"></div></div>
+
+  <!-- 수정 모달 -->
+  <div class="modal" id="editModal">
+    <div class="modal-content">
+      <div class="modal-title">수정</div>
+      <div class="modal-body">
+        <input type="date" id="editDate" class="modal-input">
+        <select id="editLocation" class="modal-input"></select>
+        <div class="modal-row">
+          <span class="modal-label">이불</span>
+          <div class="modal-qty">
+            <button class="modal-qty-btn minus" onclick="changeEditQty('editBlanket', -1)">−</button>
+            <input type="number" id="editBlanket" class="modal-qty-input" value="0">
+            <button class="modal-qty-btn plus" onclick="changeEditQty('editBlanket', 1)">+</button>
+          </div>
+        </div>
+        <div class="modal-row">
+          <span class="modal-label">매트</span>
+          <div class="modal-qty">
+            <button class="modal-qty-btn minus" onclick="changeEditQty('editMat', -1)">−</button>
+            <input type="number" id="editMat" class="modal-qty-input" value="0">
+            <button class="modal-qty-btn plus" onclick="changeEditQty('editMat', 1)">+</button>
+          </div>
+        </div>
+        <div class="modal-row">
+          <span class="modal-label">베개커버</span>
+          <div class="modal-qty">
+            <button class="modal-qty-btn minus" onclick="changeEditQty('editPillow', -1)">−</button>
+            <input type="number" id="editPillow" class="modal-qty-input" value="0">
+            <button class="modal-qty-btn plus" onclick="changeEditQty('editPillow', 1)">+</button>
+          </div>
+        </div>
+        <div class="modal-row">
+          <span class="modal-label">타올</span>
+          <div class="modal-qty">
+            <button class="modal-qty-btn minus" onclick="changeEditQty('editTowel', -1)">−</button>
+            <input type="number" id="editTowel" class="modal-qty-input" value="0">
+            <button class="modal-qty-btn plus" onclick="changeEditQty('editTowel', 1)">+</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="closeEditModal()">취소</button>
+        <button class="modal-btn confirm" onclick="updateRecord()">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 삭제 확인 모달 -->
+  <div class="modal" id="deleteModal">
+    <div class="modal-content">
+      <div class="modal-title">삭제 확인</div>
+      <div class="modal-body" style="text-align: center; color: var(--on-surface-variant);">
+        이 기록을 삭제하시겠습니까?
+      </div>
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" onclick="closeDeleteModal()">취소</button>
+        <button class="modal-btn danger" onclick="confirmDelete()">삭제</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     const SUPABASE_URL = 'https://xlbckmqdzzkwtboscjgr.supabase.co';
@@ -313,9 +628,20 @@
       { id: 'towel', name: '타올' }
     ];
 
-    function init() {
-      document.getElementById('dateInput').value = new Date().toISOString().split('T')[0];
+    let editingId = null;
+    let deletingId = null;
 
+    function init() {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('dateInput').value = today;
+
+      // 내역 조회 기간 기본값 (최근 7일)
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      document.getElementById('startDate').value = weekAgo.toISOString().split('T')[0];
+      document.getElementById('endDate').value = today;
+
+      // 입력 폼 생성
       const container = document.getElementById('locations');
       locations.forEach((loc, idx) => {
         const card = document.createElement('div');
@@ -339,9 +665,41 @@
         `;
         container.appendChild(card);
       });
+
+      // 수정 모달 숙소 선택
+      const editLocationSelect = document.getElementById('editLocation');
+      locations.forEach(loc => {
+        const option = document.createElement('option');
+        option.value = loc;
+        option.textContent = loc;
+        editLocationSelect.appendChild(option);
+      });
+
+      // 날짜 변경 시 내역 조회
+      document.getElementById('startDate').addEventListener('change', loadRecords);
+      document.getElementById('endDate').addEventListener('change', loadRecords);
+    }
+
+    function showPage(page) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+
+      if (page === 'input') {
+        document.querySelector('.tab:first-child').classList.add('active');
+        document.getElementById('inputPage').classList.add('active');
+      } else {
+        document.querySelector('.tab:last-child').classList.add('active');
+        document.getElementById('historyPage').classList.add('active');
+        loadRecords();
+      }
     }
 
     function changeQty(id, delta) {
+      const input = document.getElementById(id);
+      input.value = Math.max(0, (parseInt(input.value) || 0) + delta);
+    }
+
+    function changeEditQty(id, delta) {
       const input = document.getElementById(id);
       input.value = Math.max(0, (parseInt(input.value) || 0) + delta);
     }
@@ -402,6 +760,167 @@
         }
       } catch (error) {
         showToast('저장에 실패했습니다', 'error');
+        console.error(error);
+      } finally {
+        document.getElementById('loading').classList.remove('show');
+      }
+    }
+
+    async function loadRecords() {
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+
+      if (!startDate || !endDate) return;
+
+      document.getElementById('loading').classList.add('show');
+
+      try {
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/laundry_records?record_date=gte.${startDate}&record_date=lte.${endDate}&order=record_date.desc,created_at.desc`,
+          {
+            headers: {
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${SUPABASE_KEY}`
+            }
+          }
+        );
+
+        const data = await response.json();
+        renderRecords(data);
+      } catch (error) {
+        showToast('조회 실패', 'error');
+        console.error(error);
+      } finally {
+        document.getElementById('loading').classList.remove('show');
+      }
+    }
+
+    function renderRecords(records) {
+      const container = document.getElementById('records');
+
+      if (records.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📋</div>
+            <p>기록이 없습니다</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = records.map(r => `
+        <div class="record-card">
+          <div class="record-header">
+            <div>
+              <div class="record-date">${r.record_date}</div>
+              <div class="record-location">${r.location}</div>
+            </div>
+          </div>
+          <div class="record-body">
+            <div class="record-items">
+              ${r.blanket > 0 ? `<div class="record-item">이불 <span>${r.blanket}</span></div>` : ''}
+              ${r.mat > 0 ? `<div class="record-item">매트 <span>${r.mat}</span></div>` : ''}
+              ${r.pillow_cover > 0 ? `<div class="record-item">베개커버 <span>${r.pillow_cover}</span></div>` : ''}
+              ${r.towel > 0 ? `<div class="record-item">타올 <span>${r.towel}</span></div>` : ''}
+            </div>
+            <div class="record-actions">
+              <button class="action-btn edit" onclick="openEditModal(${r.id}, '${r.record_date}', '${r.location}', ${r.blanket}, ${r.mat}, ${r.pillow_cover}, ${r.towel})">수정</button>
+              <button class="action-btn delete" onclick="openDeleteModal(${r.id})">삭제</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function openEditModal(id, date, location, blanket, mat, pillow, towel) {
+      editingId = id;
+      document.getElementById('editDate').value = date;
+      document.getElementById('editLocation').value = location;
+      document.getElementById('editBlanket').value = blanket;
+      document.getElementById('editMat').value = mat;
+      document.getElementById('editPillow').value = pillow;
+      document.getElementById('editTowel').value = towel;
+      document.getElementById('editModal').classList.add('show');
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModal').classList.remove('show');
+      editingId = null;
+    }
+
+    async function updateRecord() {
+      if (!editingId) return;
+
+      const data = {
+        record_date: document.getElementById('editDate').value,
+        location: document.getElementById('editLocation').value,
+        blanket: parseInt(document.getElementById('editBlanket').value) || 0,
+        mat: parseInt(document.getElementById('editMat').value) || 0,
+        pillow_cover: parseInt(document.getElementById('editPillow').value) || 0,
+        towel: parseInt(document.getElementById('editTowel').value) || 0
+      };
+
+      document.getElementById('loading').classList.add('show');
+
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/laundry_records?id=eq.${editingId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`
+          },
+          body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+          showToast('수정되었습니다', 'success');
+          closeEditModal();
+          loadRecords();
+        } else {
+          throw new Error('수정 실패');
+        }
+      } catch (error) {
+        showToast('수정에 실패했습니다', 'error');
+        console.error(error);
+      } finally {
+        document.getElementById('loading').classList.remove('show');
+      }
+    }
+
+    function openDeleteModal(id) {
+      deletingId = id;
+      document.getElementById('deleteModal').classList.add('show');
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('deleteModal').classList.remove('show');
+      deletingId = null;
+    }
+
+    async function confirmDelete() {
+      if (!deletingId) return;
+
+      document.getElementById('loading').classList.add('show');
+
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/laundry_records?id=eq.${deletingId}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`
+          }
+        });
+
+        if (response.ok) {
+          showToast('삭제되었습니다', 'success');
+          closeDeleteModal();
+          loadRecords();
+        } else {
+          throw new Error('삭제 실패');
+        }
+      } catch (error) {
+        showToast('삭제에 실패했습니다', 'error');
         console.error(error);
       } finally {
         document.getElementById('loading').classList.remove('show');
