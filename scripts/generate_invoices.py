@@ -64,19 +64,19 @@ BUSINESS_MAP = {
 
 # 품목 단가
 PRICES = {
-    'blanket': 6500,       # 이불
-    'mat': 4500,           # 요
-    'pillow_cover': 1500,  # 베개커버
-    'towel': 1000,         # 수건
-    'body_towel': 700,     # 바디타월
+    'blanket': 3000,       # 이불
+    'mat': 2000,           # 매트
+    'pillow_cover': 250,   # 베개커버
+    'towel': 500,          # 타올
+    'body_towel': 800,     # 바디타올
 }
 
 ITEM_NAMES = {
     'blanket': '이불',
-    'mat': '요',
+    'mat': '매트',
     'pillow_cover': '베개커버',
-    'towel': '수건',
-    'body_towel': '바디타월',
+    'towel': '타올',
+    'body_towel': '바디타올',
 }
 
 
