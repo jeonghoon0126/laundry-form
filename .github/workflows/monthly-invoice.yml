@@ -1,0 +1,66 @@
+name: Monthly Invoice Generation
+
+on:
+  schedule:
+    # 매월 28-31일 12시 (KST) = UTC 03:00
+    # 스크립트에서 말일인지 체크
+    - cron: '0 3 28-31 * *'
+  workflow_dispatch:
+    inputs:
+      year:
+        description: 'Year (YYYY)'
+        required: false
+      month:
+        description: 'Month (1-12)'
+        required: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check if last day of month
+        id: check_day
+        run: |
+          # 오늘이 말일인지 체크
+          today=$(date +%d)
+          last_day=$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%d)
+
+          if [ "$today" = "$last_day" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+            echo "오늘($today)은 말일($last_day)이 아님. 스킵."
+          fi
+
+      - name: Set up Python
+        if: steps.check_day.outputs.run == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install fonts
+        if: steps.check_day.outputs.run == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+
+      - name: Install dependencies
+        if: steps.check_day.outputs.run == 'true'
+        run: |
+          pip install psycopg2-binary reportlab openpyxl
+
+      - name: Generate invoices
+        if: steps.check_day.outputs.run == 'true'
+        env:
+          SUPABASE_URI: ${{ secrets.SUPABASE_URI }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+        run: |
+          if [ -n "${{ inputs.year }}" ] && [ -n "${{ inputs.month }}" ]; then
+            python scripts/generate_invoices.py ${{ inputs.year }} ${{ inputs.month }}
+          else
+            python scripts/generate_invoices.py
+          fi
