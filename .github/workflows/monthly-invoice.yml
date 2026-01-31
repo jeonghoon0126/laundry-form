@@ -64,3 +64,16 @@ jobs:
           else
             python scripts/generate_invoices.py
           fi
+
+      - name: Update profit sheet
+        if: steps.check_day.outputs.run == 'true'
+        run: |
+          # 영업이익계산 시트 업데이트 (Apps Script 웹앱 호출)
+          WEBAPP_URL="https://script.google.com/macros/s/AKfycbyNPrFnDRTUqXo5m_ZVF6Zypkemu73oUOgWjI7jjW99m5315WR5d2ND0xNr0CD8G3bm/exec"
+
+          if [ -n "${{ inputs.year }}" ] && [ -n "${{ inputs.month }}" ]; then
+            curl -sL "${WEBAPP_URL}?year=${{ inputs.year }}&month=${{ inputs.month }}"
+          else
+            curl -sL "${WEBAPP_URL}"
+          fi
+          echo "영업이익계산 시트 업데이트 완료"
