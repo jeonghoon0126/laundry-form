@@ -32,14 +32,14 @@ from openpyxl import Workbook
 # 설정
 # ============================================================
 
-# Supabase 연결 정보
+# Supabase 연결 정보 (strip으로 공백/줄바꿈 제거)
 SUPABASE_URI = os.environ.get('SUPABASE_URI',
-    "postgresql://postgres.xlbckmqdzzkwtboscjgr:pmjeonghoon4189@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require")
+    "postgresql://postgres.xlbckmqdzzkwtboscjgr:pmjeonghoon4189@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require").strip()
 
 # 이메일 설정
 EMAIL_FROM = "kham0126@gmail.com"
 EMAIL_TO = "kham0126@gmail.com"
-EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', '')
+EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', '').strip()
 
 # 공급자 정보
 SUPPLIER = {
