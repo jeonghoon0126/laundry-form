@@ -69,7 +69,7 @@ jobs:
         if: steps.check_day.outputs.run == 'true'
         run: |
           # 영업이익계산 시트 업데이트 (Apps Script 웹앱 호출)
-          WEBAPP_URL="https://script.google.com/macros/s/AKfycbzQGsJM2SlBrEyf3cabPrDlEg2Y5JIEIMTeEcus5o-HWTqpTw8a_WgEJYhAiAIWC_YLUg/exec"
+          WEBAPP_URL="https://script.google.com/macros/s/AKfycbxvvcdxuzUHw9nh_Lfp17e6QRQNZYq8j04YM0pO66kEUhyHKVVKBsu6C5NRp825qZfNLQ/exec"
 
           if [ -n "${{ inputs.year }}" ] && [ -n "${{ inputs.month }}" ]; then
             curl -sL "${WEBAPP_URL}?year=${{ inputs.year }}&month=${{ inputs.month }}"
