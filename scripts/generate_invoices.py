@@ -62,13 +62,22 @@ BUSINESS_MAP = {
     '관악구 신림동1길 19-5': ('461-86-03598', '주식회사스테이모먼트', '유경민'),
 }
 
-# 품목 단가
+# 품목 단가 (기본)
 PRICES = {
     'blanket': 3000,       # 이불
     'mat': 2000,           # 매트
     'pillow_cover': 250,   # 베개커버
     'towel': 500,          # 타올
     'body_towel': 800,     # 바디타올
+}
+
+# 사업자번호별 단가 override (기본값과 다른 항목만 기재)
+BUSINESS_PRICES = {
+    '419-11-02853': {      # 오를리(Orly) 김지혜
+        'blanket': 3000,   # 이불
+        'pillow_cover': 250,  # 베개커버
+        'mat': 1500,       # 매트 (기본 2,000 → 오를리 1,500)
+    },
 }
 
 ITEM_NAMES = {
@@ -78,6 +87,14 @@ ITEM_NAMES = {
     'towel': '타올',
     'body_towel': '바디타올',
 }
+
+
+def get_prices(reg_no: str) -> dict:
+    """사업자번호에 맞는 단가 반환 (override 적용)"""
+    prices = dict(PRICES)
+    if reg_no in BUSINESS_PRICES:
+        prices.update(BUSINESS_PRICES[reg_no])
+    return prices
 
 
 # ============================================================
@@ -231,10 +248,11 @@ def generate_pdf(reg_no: str, data: dict, year: int, month: int) -> BytesIO:
         item_rows = [['품목', '수량', '단가', '금액']]
         loc_total = 0
 
+        prices = get_prices(reg_no)
         for item_key, item_name in ITEM_NAMES.items():
             qty = loc_data.get(item_key, 0)
             if qty > 0:
-                price = PRICES[item_key]
+                price = prices[item_key]
                 amount = qty * price
                 loc_total += amount
                 item_rows.append([item_name, f"{qty:,}", f"{price:,}원", f"{amount:,}원"])
@@ -341,9 +359,10 @@ def generate_excel(business_data: dict, year: int, month: int) -> BytesIO:
     for reg_no, data in business_data.items():
         # 총액 계산
         total = 0
+        prices = get_prices(reg_no)
         for loc_data in data['locations'].values():
-            for item_key in PRICES:
-                total += (loc_data.get(item_key, 0) or 0) * PRICES[item_key]
+            for item_key in prices:
+                total += (loc_data.get(item_key, 0) or 0) * prices[item_key]
 
         for item in data.get('extra_items', []):
             total += item['amount']
@@ -459,10 +478,11 @@ def main():
 
     # 합계 계산
     total_amount = 0
-    for data in business_data.values():
+    for reg_no, data in business_data.items():
+        prices = get_prices(reg_no)
         for loc_data in data['locations'].values():
-            for item_key in PRICES:
-                total_amount += (loc_data.get(item_key, 0) or 0) * PRICES[item_key]
+            for item_key in prices:
+                total_amount += (loc_data.get(item_key, 0) or 0) * prices[item_key]
         for item in data.get('extra_items', []):
             total_amount += item['amount']
 
