@@ -261,6 +261,7 @@ def send_sms(message: str) -> None:
             "to": recipient,
             "from": sender,
             "text": message,
+            "type": "LMS",
         }
     }).encode()
 
