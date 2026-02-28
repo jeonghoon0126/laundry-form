@@ -51,29 +51,17 @@ jobs:
       - name: Install dependencies
         if: steps.check_day.outputs.run == 'true'
         run: |
-          pip install psycopg2-binary reportlab openpyxl
+          pip install psycopg2-binary reportlab openpyxl google-auth
 
       - name: Generate invoices
         if: steps.check_day.outputs.run == 'true'
         env:
           SUPABASE_URI: ${{ secrets.SUPABASE_URI }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          SHEETS_SERVICE_ACCOUNT: ${{ secrets.SHEETS_SERVICE_ACCOUNT }}
         run: |
           if [ -n "${{ inputs.year }}" ] && [ -n "${{ inputs.month }}" ]; then
             python scripts/generate_invoices.py ${{ inputs.year }} ${{ inputs.month }}
           else
             python scripts/generate_invoices.py
           fi
-
-      - name: Update profit sheet
-        if: steps.check_day.outputs.run == 'true'
-        run: |
-          # 영업이익계산 시트 업데이트 (Apps Script 웹앱 호출)
-          WEBAPP_URL="https://script.google.com/macros/s/AKfycbxvvcdxuzUHw9nh_Lfp17e6QRQNZYq8j04YM0pO66kEUhyHKVVKBsu6C5NRp825qZfNLQ/exec"
-
-          if [ -n "${{ inputs.year }}" ] && [ -n "${{ inputs.month }}" ]; then
-            curl -sL "${WEBAPP_URL}?year=${{ inputs.year }}&month=${{ inputs.month }}"
-          else
-            curl -sL "${WEBAPP_URL}"
-          fi
-          echo "영업이익계산 시트 업데이트 완료"

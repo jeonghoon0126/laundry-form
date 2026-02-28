@@ -88,6 +88,35 @@ ITEM_NAMES = {
     'body_towel': '바디타올',
 }
 
+# ============================================================
+# Google Sheets 연동 설정
+# ============================================================
+
+CARRY_KOEUN_SPREADSHEET_ID = '1awoBzifmkDdnbQ-t3JAO5t9Ktnd9Qpn-PZgbQj_6apA'  # 캐리_고객
+CARRY_JUNGSAN_SPREADSHEET_ID = '1yBDSsG8vgvM-e2oswAqDh2g1K0hzGzANstnesPWPBg4'  # 캐리_정산
+
+SHEETS_FIXED_COSTS = {
+    'hourly_wage': 12000,          # D열: 시급
+    'logistics_count': 8,          # F열: 물류 횟수
+    'logistics_cost_per': 120000,  # G열: 물류 1회 비용
+    'rent_utility': 770000,        # I열: 월세+관리비
+    'electricity': 150000,         # J열: 전기세
+    'water': 100000,               # K열: 수도세
+    'insurance': 60000,            # L열: 보험
+    'supplies': 150000,            # M열: 소모품
+}
+
+INVOICE_SHEET_MAP = {
+    '동대문구 회기로 189':          'invoice(거래명세서)_Orly',
+    '관악구 신림동1길 19-5':        'invoice(거래명세서)_스테이모먼트',
+    '서대문구 연희로4길 25-7':      'invoice(거래명세서)_서대문구 연희로4길 25-7, 연남에코리빙',
+    '동대문구 고산자로 508-3':      'invoice(거래명세서)_동대문구 고산자로 508-3, 스테이브리즈',
+    '동대문구 왕산로 200, 1004호':  'invoice(거래명세서)_동대문구 왕산로 200, 청량리역 롯데캐슬 SKY-L65',
+    '송파구 가락로28길 3-10':       'invoice(거래명세서)_송파구 가락로28길 3-10 스테이브리즈 송파',
+    '광진구 능동로 165-1':          'invoice(거래명세서)_능동로 165-1 화양프라하임',
+    '동대문구 장한로26나길 21':     'invoice(거래명세서)_가회',
+}
+
 
 def get_prices(reg_no: str) -> dict:
     """사업자번호에 맞는 단가 반환 (override 적용)"""
@@ -425,6 +454,144 @@ def send_email(subject: str, body: str, attachments: list):
 
 
 # ============================================================
+# Google Sheets 연동 함수
+# ============================================================
+
+def get_sheets_token() -> str:
+    """서비스 계정 JSON 환경변수 → Google Sheets API access token"""
+    import json as _json
+    key_json = os.environ.get('SHEETS_SERVICE_ACCOUNT', '').strip()
+    if not key_json:
+        return ''
+    try:
+        from google.oauth2 import service_account
+        import google.auth.transport.requests
+        key_dict = _json.loads(key_json)
+        creds = service_account.Credentials.from_service_account_info(
+            key_dict,
+            scopes=['https://www.googleapis.com/auth/spreadsheets']
+        )
+        creds.refresh(google.auth.transport.requests.Request())
+        return creds.token
+    except ImportError:
+        print("google-auth 미설치. pip install google-auth 필요")
+        return ''
+    except Exception as e:
+        print(f"Sheets 인증 실패: {e}")
+        return ''
+
+
+def _sheets_get(spreadsheet_id: str, token: str, range_str: str) -> list:
+    """Sheets API values.get"""
+    import urllib.request as _req
+    import urllib.parse as _up
+    import json as _json
+    url = f'https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{_up.quote(range_str)}'
+    req = _req.Request(url, headers={'Authorization': f'Bearer {token}'})
+    with _req.urlopen(req) as resp:
+        return _json.loads(resp.read()).get('values', [])
+
+
+def _sheets_batch_update(spreadsheet_id: str, token: str, data: list):
+    """Sheets API values:batchUpdate"""
+    import urllib.request as _req
+    import json as _json
+    url = f'https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values:batchUpdate'
+    body = _json.dumps({'valueInputOption': 'RAW', 'data': data}).encode()
+    req = _req.Request(url, data=body, method='POST',
+                       headers={'Authorization': f'Bearer {token}',
+                                'Content-Type': 'application/json'})
+    with _req.urlopen(req) as resp:
+        return _json.loads(resp.read())
+
+
+def update_profit_sheet(year: int, month: int, total_amount: int) -> bool:
+    """캐리_고객 '영업이익계산' 시트 업데이트"""
+    token = get_sheets_token()
+    if not token:
+        print("SHEETS_SERVICE_ACCOUNT 미설정. 영업이익계산 시트 업데이트 건너뜀.")
+        return False
+
+    try:
+        rows = _sheets_get(CARRY_KOEUN_SPREADSHEET_ID, token, '영업이익계산!A:A')
+        month_str = f'{year}-{month}'
+
+        target_row = None
+        for i, row in enumerate(rows, 1):
+            if row and str(row[0]).strip() == month_str:
+                target_row = i
+                break
+
+        if target_row is None:
+            target_row = len(rows) + 1
+
+        FC = SHEETS_FIXED_COSTS
+        vat = round(total_amount / 11)
+
+        data = [
+            {'range': f'영업이익계산!A{target_row}', 'values': [[month_str]]},
+            {'range': f'영업이익계산!B{target_row}', 'values': [[total_amount]]},
+            {'range': f'영업이익계산!D{target_row}', 'values': [[FC['hourly_wage']]]},
+            {'range': f'영업이익계산!F{target_row}', 'values': [[FC['logistics_count']]]},
+            {'range': f'영업이익계산!G{target_row}', 'values': [[FC['logistics_cost_per']]]},
+            {'range': f'영업이익계산!H{target_row}', 'values': [[FC['logistics_count'] * FC['logistics_cost_per']]]},
+            {'range': f'영업이익계산!I{target_row}', 'values': [[FC['rent_utility']]]},
+            {'range': f'영업이익계산!J{target_row}', 'values': [[FC['electricity']]]},
+            {'range': f'영업이익계산!K{target_row}', 'values': [[FC['water']]]},
+            {'range': f'영업이익계산!L{target_row}', 'values': [[FC['insurance']]]},
+            {'range': f'영업이익계산!M{target_row}', 'values': [[FC['supplies']]]},
+            {'range': f'영업이익계산!O{target_row}', 'values': [[vat]]},
+        ]
+
+        _sheets_batch_update(CARRY_KOEUN_SPREADSHEET_ID, token, data)
+        print(f"영업이익계산 시트 업데이트 완료: {month_str} ({target_row}행), 매출 {total_amount:,}원")
+        return True
+    except Exception as e:
+        print(f"영업이익계산 시트 업데이트 실패: {e}")
+        return False
+
+
+def update_invoice_sheets(year: int, month: int, rows: list) -> bool:
+    """캐리_정산 각 invoice 시트 수량/월 업데이트"""
+    token = get_sheets_token()
+    if not token:
+        print("SHEETS_SERVICE_ACCOUNT 미설정. 거래명세서 시트 업데이트 건너뜀.")
+        return False
+
+    location_totals = {}
+    for row in rows:
+        _, location, blanket, mat, pillow_cover, towel, _ = row
+        if location not in location_totals:
+            location_totals[location] = {'blanket': 0, 'mat': 0, 'pillow_cover': 0, 'towel': 0}
+        location_totals[location]['blanket'] += blanket or 0
+        location_totals[location]['mat'] += mat or 0
+        location_totals[location]['pillow_cover'] += pillow_cover or 0
+        location_totals[location]['towel'] += towel or 0
+
+    month_str = f'{year}년 {month}월'
+
+    for location, qty in location_totals.items():
+        sheet_name = INVOICE_SHEET_MAP.get(location)
+        if not sheet_name:
+            print(f"  invoice 매핑 없음: {location}")
+            continue
+        try:
+            data = [
+                {'range': f"'{sheet_name}'!B8",  'values': [[month_str]]},
+                {'range': f"'{sheet_name}'!D12", 'values': [[qty['blanket']]]},
+                {'range': f"'{sheet_name}'!D13", 'values': [[qty['mat']]]},
+                {'range': f"'{sheet_name}'!D14", 'values': [[qty['pillow_cover']]]},
+                {'range': f"'{sheet_name}'!D15", 'values': [[qty['towel']]]},
+            ]
+            _sheets_batch_update(CARRY_JUNGSAN_SPREADSHEET_ID, token, data)
+            print(f"  invoice 시트 업데이트 완료: {sheet_name}")
+        except Exception as e:
+            print(f"  invoice 시트 업데이트 실패 ({sheet_name}): {e}")
+
+    return True
+
+
+# ============================================================
 # 메인
 # ============================================================
 
@@ -507,6 +674,10 @@ def main():
         buffer.seek(0)
 
     send_email(subject, body, attachments)
+
+    # Google Sheets 업데이트
+    update_profit_sheet(year, month, total_amount)
+    update_invoice_sheets(year, month, rows)
 
     # 로컬 저장 (테스트용)
     if os.environ.get('SAVE_LOCAL'):
