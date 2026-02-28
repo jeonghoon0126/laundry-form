@@ -14,6 +14,7 @@ import json
 import urllib.request
 import urllib.parse
 from datetime import datetime, date, timedelta
+from typing import Optional
 import pytz
 
 KST = pytz.timezone("Asia/Seoul")
@@ -102,7 +103,7 @@ ADDRESS_NORMALIZE = {
 }
 
 
-def normalize_address(raw: str) -> str | None:
+def normalize_address(raw: str) -> Optional[str]:
     """laundry_records.location → LOCATIONS 키로 정규화"""
     raw = raw.strip()
     if raw in ADDRESS_NORMALIZE:
@@ -149,7 +150,7 @@ def fetch_today_locations(today: date) -> list[str]:
     return locations
 
 
-def fetch_next_schedule(location_key: str, after: date) -> date | None:
+def fetch_next_schedule(location_key: str, after: date) -> Optional[date]:
     """특정 위치의 다음 수거 예정일 조회 (미래 레코드)"""
     url = os.environ["SUPABASE_URL"].rstrip("/")
     key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
@@ -286,8 +287,11 @@ def send_sms(message: str) -> None:
 # 메인
 # ──────────────────────────────────────────────
 def main() -> None:
-    now_kst = datetime.now(KST)
-    today = now_kst.date()
+    test_date = os.environ.get("TEST_DATE")
+    if test_date:
+        today = date.fromisoformat(test_date)
+    else:
+        today = datetime.now(KST).date()
 
     print(f"[캐리 동선 발송] {today} ({WEEKDAY_KO[today.weekday()]})")
 
