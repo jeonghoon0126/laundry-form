@@ -40,5 +40,6 @@ jobs:
           SOLAPI_API_SECRET: ${{ secrets.SOLAPI_API_SECRET }}
           SOLAPI_SENDER: ${{ secrets.SOLAPI_SENDER }}
           RECIPIENT_PHONE: ${{ secrets.RECIPIENT_PHONE }}
+          OWNER_PHONE: ${{ secrets.OWNER_PHONE }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: python scripts/send_route_sms.py

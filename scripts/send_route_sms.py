@@ -246,22 +246,17 @@ def _solapi_signature(api_key: str, api_secret: str) -> tuple:
     return date_str, salt, signature
 
 
-def send_sms(message: str) -> None:
-    """Solapi API로 SMS 발송"""
-    api_key = os.environ["SOLAPI_API_KEY"]
-    api_secret = os.environ["SOLAPI_API_SECRET"]
-    sender = os.environ["SOLAPI_SENDER"]
-    recipient = os.environ["RECIPIENT_PHONE"]
-
+def _send_single(api_key: str, api_secret: str, sender: str, to: str, text: str, msg_type: str = "LMS") -> None:
+    """Solapi API로 단건 발송"""
     now_ms, salt, signature = _solapi_signature(api_key, api_secret)
     auth_header = f"HMAC-SHA256 apiKey={api_key}, date={now_ms}, salt={salt}, signature={signature}"
 
     payload = json.dumps({
         "message": {
-            "to": recipient,
+            "to": to,
             "from": sender,
-            "text": message,
-            "type": "LMS",
+            "text": text,
+            "type": msg_type,
         }
     }).encode()
 
@@ -280,7 +275,24 @@ def send_sms(message: str) -> None:
     if result.get("errorCode"):
         raise RuntimeError(f"Solapi 발송 실패: {result}")
 
-    print(f"[OK] SMS 발송 완료 → {recipient}")
+
+def send_sms(message: str, stop_count: int) -> None:
+    """기사님께 동선 LMS 발송 + 오너에게 확인 SMS 발송"""
+    api_key = os.environ["SOLAPI_API_KEY"]
+    api_secret = os.environ["SOLAPI_API_SECRET"]
+    sender = os.environ["SOLAPI_SENDER"]
+    recipient = os.environ["RECIPIENT_PHONE"]
+    owner_phone = os.environ.get("OWNER_PHONE", "")
+
+    # 기사님 동선 발송
+    _send_single(api_key, api_secret, sender, recipient, message, "LMS")
+    print(f"[OK] 기사님 SMS 발송 완료 → {recipient}")
+
+    # 오너 확인 알림 (OWNER_PHONE 설정 시)
+    if owner_phone:
+        notify_text = f"[캐리] 동선 문자 발송 완료 ({stop_count}개 스톱)"
+        _send_single(api_key, api_secret, sender, owner_phone, notify_text, "SMS")
+        print(f"[OK] 오너 확인 알림 → {owner_phone}")
 
 
 # ──────────────────────────────────────────────
@@ -320,7 +332,7 @@ def main() -> None:
         print("[DRY_RUN] 실제 발송 안 함")
         return
 
-    send_sms(message)
+    send_sms(message, len(known))
 
 
 if __name__ == "__main__":
