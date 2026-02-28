@@ -11,9 +11,10 @@ import hashlib
 import hmac
 import time
 import json
+import uuid
 import urllib.request
 import urllib.parse
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Optional
 import pytz
 
@@ -236,15 +237,13 @@ def build_message(today: date, location_keys: list[str]) -> str:
 # ──────────────────────────────────────────────
 # Solapi SMS 발송
 # ──────────────────────────────────────────────
-def _solapi_signature(api_key: str, api_secret: str) -> tuple[str, str, str]:
-    """Solapi HMAC-SHA256 서명 생성"""
-    now_ms = str(int(time.time() * 1000))
-    salt = hashlib.md5(now_ms.encode()).hexdigest()[:20]
-    data = f"date={now_ms}&salt={salt}"
-    signature = hmac.new(
-        api_secret.encode(), data.encode(), "sha256"
-    ).hexdigest()
-    return now_ms, salt, signature
+def _solapi_signature(api_key: str, api_secret: str) -> tuple:
+    """Solapi HMAC-SHA256 서명 생성 (ISO 8601 date + random salt)"""
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    salt = str(uuid.uuid4()).replace("-", "")[:20]
+    msg = date_str + salt
+    signature = hmac.new(api_secret.encode(), msg.encode(), "sha256").hexdigest()
+    return date_str, salt, signature
 
 
 def send_sms(message: str) -> None:
