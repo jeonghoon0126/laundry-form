@@ -679,13 +679,16 @@ def main():
     update_profit_sheet(year, month, total_amount)
     update_invoice_sheets(year, month, rows)
 
-    # 로컬 저장 (테스트용)
+    # 로컬 저장 (iCloud Drive 월별 폴더)
     if os.environ.get('SAVE_LOCAL'):
-        output_dir = f"/tmp/invoice_{year}_{month}"
+        icloud_base = os.path.expanduser(
+            "~/Library/Mobile Documents/com~apple~CloudDocs/캐리_정산"
+        )
+        output_dir = os.path.join(icloud_base, f"{year}년_{month}월")
         os.makedirs(output_dir, exist_ok=True)
         for filename, buffer in attachments:
             buffer.seek(0)
-            with open(f"{output_dir}/{filename}", 'wb') as f:
+            with open(os.path.join(output_dir, filename), 'wb') as f:
                 f.write(buffer.read())
         print(f"로컬 저장: {output_dir}")
 
