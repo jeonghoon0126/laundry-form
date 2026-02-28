@@ -23,7 +23,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from openpyxl import Workbook
@@ -355,6 +355,20 @@ def generate_pdf(reg_no: str, data: dict, year: int, month: int) -> BytesIO:
 
     # 입금 계좌
     elements.append(Paragraph(f"입금계좌: {SUPPLIER['bank']}", normal_style))
+
+    # 통장 사본 이미지
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    bank_img_path = os.path.join(script_dir, '캐리_사업자통장사본.png')
+    if os.path.exists(bank_img_path):
+        from reportlab.lib.utils import ImageReader
+        ir = ImageReader(bank_img_path)
+        orig_w, orig_h = ir.getSize()
+        target_w = 160 * mm
+        target_h = target_w * orig_h / orig_w
+        elements.append(Spacer(1, 8*mm))
+        img = Image(bank_img_path, width=target_w, height=target_h)
+        img.hAlign = 'LEFT'
+        elements.append(img)
 
     doc.build(elements)
     buffer.seek(0)
