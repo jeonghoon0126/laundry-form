@@ -453,6 +453,92 @@ def send_email(subject: str, body: str, attachments: list):
         return False
 
 
+def send_report_email(year: int, month: int, rows: list, business_data: dict) -> bool:
+    """내부 검토용 정산 레포트 이메일 발송 (kham0126@gmail.com)"""
+    if not EMAIL_PASSWORD:
+        print("EMAIL_PASSWORD 미설정. 레포트 이메일 건너뜀.")
+        return False
+
+    from collections import defaultdict
+
+    weekday_ko = ['월', '화', '수', '목', '금', '토', '일']
+
+    # location -> [(date, blanket, mat, pillow_cover, towel, body_towel)]
+    daily = defaultdict(list)
+    for row in rows:
+        record_date, location, blanket, mat, pillow_cover, towel, body_towel = row
+        daily[location].append((record_date, blanket or 0, mat or 0,
+                                 pillow_cover or 0, towel or 0, body_towel or 0))
+    for loc in daily:
+        daily[loc].sort(key=lambda x: x[0])
+
+    lines = []
+    lines.append(f"[캐리] {year}년 {month}월 정산 내부 레포트")
+    lines.append(f"레코드 {len(rows)}건 | 사업자 {len(business_data)}개")
+    lines.append("=" * 62)
+
+    grand_total = 0
+
+    for reg_no, data in business_data.items():
+        prices = get_prices(reg_no)
+        biz_total = 0
+
+        lines.append(f"\n■ {data['name']}  ({reg_no})")
+
+        for location in sorted(data['locations'].keys()):
+            loc_rows = daily.get(location, [])
+            loc_total = 0
+
+            lines.append(f"\n  ▶ {location}")
+            lines.append(f"  {'날짜':<12}{'이불':>5}{'매트':>5}{'베개커버':>7}{'타올':>5}{'바디타올':>7}  {'금액':>10}")
+            lines.append("  " + "-" * 55)
+
+            for record_date, blanket, mat, pillow_cover, towel, body_towel in loc_rows:
+                if blanket + mat + pillow_cover + towel + body_towel == 0:
+                    continue
+                row_amount = (blanket * prices.get('blanket', 0) +
+                              mat * prices.get('mat', 0) +
+                              pillow_cover * prices.get('pillow_cover', 0) +
+                              towel * prices.get('towel', 0) +
+                              body_towel * prices.get('body_towel', 0))
+                loc_total += row_amount
+                wd = weekday_ko[record_date.weekday()]
+                date_str = f"{record_date.month}/{record_date.day:02d}({wd})"
+                lines.append(f"  {date_str:<12}{blanket:>5}{mat:>5}{pillow_cover:>7}"
+                              f"{towel:>5}{body_towel:>7}  {row_amount:>10,}")
+
+            loc_qty = data['locations'][location]
+            lines.append("  " + "-" * 55)
+            lines.append(f"  {'소계':<12}{loc_qty['blanket']:>5}{loc_qty['mat']:>5}"
+                          f"{loc_qty['pillow_cover']:>7}{loc_qty['towel']:>5}"
+                          f"{loc_qty.get('body_towel', 0):>7}  {loc_total:>10,}")
+            biz_total += loc_total
+
+        lines.append(f"\n  {data['name']} 합계: {biz_total:,}원")
+        grand_total += biz_total
+
+    lines.append("\n" + "=" * 62)
+    lines.append(f"총 매출: {grand_total:,}원")
+
+    body = "\n".join(lines)
+    subject = f"[캐리 레포트] {year}년 {month}월 정산 검토"
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_FROM
+        msg['To'] = EMAIL_FROM
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(EMAIL_FROM, EMAIL_PASSWORD)
+            server.send_message(msg)
+        print("레포트 이메일 발송 완료")
+        return True
+    except Exception as e:
+        print(f"레포트 이메일 발송 실패: {e}")
+        return False
+
+
 # ============================================================
 # Google Sheets 연동 함수
 # ============================================================
@@ -673,6 +759,7 @@ def main():
     for filename, buffer in attachments:
         buffer.seek(0)
 
+    send_report_email(year, month, rows, business_data)
     send_email(subject, body, attachments)
 
     # Google Sheets 업데이트
