@@ -462,6 +462,60 @@ def send_email(subject: str, body: str, attachments: list):
         return False
 
 
+def _get_6month_trend(year: int, month: int) -> list:
+    """최근 6개월 월별 매출 합계 반환 [(year, month, total), ...]"""
+    # 시작월 계산 (5개월 전)
+    months = []
+    y, m = year, month
+    for _ in range(6):
+        months.append((y, m))
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    months.reverse()  # 오래된 순서로
+
+    try:
+        conn = psycopg2.connect(SUPABASE_URI)
+        cur = conn.cursor()
+        start_y, start_m = months[0]
+        cur.execute("""
+            SELECT EXTRACT(YEAR FROM record_date)::int  AS y,
+                   EXTRACT(MONTH FROM record_date)::int AS m,
+                   location,
+                   COALESCE(SUM(blanket),0)      AS blanket,
+                   COALESCE(SUM(mat),0)          AS mat,
+                   COALESCE(SUM(pillow_cover),0) AS pillow_cover,
+                   COALESCE(SUM(towel),0)        AS towel,
+                   COALESCE(SUM(body_towel),0)   AS body_towel
+            FROM laundry_records
+            WHERE record_date >= make_date(%s, %s, 1)
+              AND record_date <  make_date(%s, %s, 1) + INTERVAL '1 month'
+            GROUP BY y, m, location
+            ORDER BY y, m
+        """, (start_y, start_m, year, month))
+        loc_rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"6개월 추이 조회 실패: {e}")
+        return [(y, m, 0) for y, m in months]
+
+    # 월별 합산
+    monthly = {(y, m): 0 for y, m in months}
+    for row_y, row_m, loc, bl, mt, pc, tw, bt in loc_rows:
+        if loc not in BUSINESS_MAP:
+            continue
+        reg_no = BUSINESS_MAP[loc][0]
+        p = get_prices(reg_no)
+        amt = bl*p['blanket'] + mt*p['mat'] + pc*p['pillow_cover'] + tw*p['towel'] + bt*p['body_towel']
+        key = (int(row_y), int(row_m))
+        if key in monthly:
+            monthly[key] += amt
+
+    return [(y, m, monthly[(y, m)]) for y, m in months]
+
+
 def send_report_email(year: int, month: int, rows: list, business_data: dict) -> bool:
     """내부 검토용 정산 레포트 이메일 발송 (HTML 테이블)"""
     if not EMAIL_PASSWORD:
@@ -553,14 +607,43 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
   </p>
 </div>""")
 
+    # 최근 6개월 추이
+    trend = _get_6month_trend(year, month)
+    max_amt = max(t[2] for t in trend) or 1
+    trend_rows = []
+    for t_y, t_m, t_amt in trend:
+        bar_pct = int(t_amt / max_amt * 100)
+        is_cur = (t_y == year and t_m == month)
+        bar_color = '#1e40af' if is_cur else '#93c5fd'
+        label_style = 'font-weight:bold;color:#1e40af;' if is_cur else 'color:#374151;'
+        trend_rows.append(
+            f'<tr>'
+            f'<td style="padding:4px 10px;font-size:13px;{label_style}white-space:nowrap;">{t_y}년 {t_m}월</td>'
+            f'<td style="padding:4px 10px;width:100%;">'
+            f'  <div style="background:{bar_color};height:16px;width:{bar_pct}%;border-radius:3px;min-width:2px;"></div>'
+            f'</td>'
+            f'<td style="padding:4px 10px;text-align:right;font-size:13px;{label_style}white-space:nowrap;">'
+            f'  {t_amt:,}원{"  ◀ 이번달" if is_cur else ""}'
+            f'</td>'
+            f'</tr>'
+        )
+    trend_html = f"""
+<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin-bottom:20px;">
+  <h3 style="margin:0 0 12px;font-size:15px;color:#0369a1;">최근 6개월 매출 추이</h3>
+  <table style="border-collapse:collapse;width:100%;">
+    {''.join(trend_rows)}
+  </table>
+</div>"""
+
     html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="font-family:'Apple SD Gothic Neo',Arial,sans-serif;max-width:720px;margin:0 auto;padding:20px;color:#111827;">
   <h2 style="margin:0 0 4px;font-size:20px;color:#111827;">[캐리] {year}년 {month}월 정산 내부 레포트</h2>
   <p style="margin:0 0 20px;font-size:13px;color:#6b7280;">레코드 {len(rows)}건 · 사업자 {len(business_data)}개</p>
+  {trend_html}
   {''.join(sections)}
   <div style="background:#1e40af;color:#fff;border-radius:8px;padding:14px 20px;text-align:right;font-size:18px;font-weight:bold;">
-    2월 총 매출: {grand_total:,}원
+    {month}월 총 매출: {grand_total:,}원
   </div>
 </body></html>"""
 
