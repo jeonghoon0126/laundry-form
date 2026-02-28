@@ -193,11 +193,12 @@ def aggregate_by_business(rows: list) -> dict:
 
 def register_font():
     """한글 폰트 등록"""
+    # 스크립트와 같은 디렉토리의 번들 폰트를 최우선 사용
+    script_dir = os.path.dirname(os.path.abspath(__file__))
     font_paths = [
+        os.path.join(script_dir, 'NotoSansKR.ttf'),           # 번들 폰트 (최우선)
         '/usr/share/fonts/truetype/noto/NotoSansKR-Regular.ttf',  # Ubuntu
-        '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',  # Ubuntu alt
-        '/System/Library/Fonts/AppleSDGothicNeo.ttc',  # macOS
-        'NotoSansKR-Regular.ttf',  # 로컬
+        'NotoSansKR.ttf',                                      # 로컬 현재 디렉토리
     ]
 
     for path in font_paths:
@@ -207,12 +208,6 @@ def register_font():
                 return True
             except:
                 continue
-
-    # GitHub Actions에서 설치된 폰트 경로
-    noto_path = '/usr/share/fonts/truetype/noto-cjk/NotoSansCJK-Regular.ttc'
-    if os.path.exists(noto_path):
-        pdfmetrics.registerFont(TTFont('Korean', noto_path))
-        return True
 
     return False
 
