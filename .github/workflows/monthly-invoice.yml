@@ -2,9 +2,9 @@ name: Monthly Invoice Generation
 
 on:
   schedule:
-    # 매월 28-31일 12시 (KST) = UTC 03:00
+    # 매월 28-31일 09시 (KST) = UTC 00:00
     # 스크립트에서 말일인지 체크
-    - cron: '0 3 28-31 * *'
+    - cron: '0 0 28-31 * *'
   workflow_dispatch:
     inputs:
       year:
