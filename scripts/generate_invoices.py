@@ -682,7 +682,7 @@ def main():
     # 로컬 저장 (iCloud Drive 월별 폴더)
     if os.environ.get('SAVE_LOCAL'):
         icloud_base = os.path.expanduser(
-            "~/Library/Mobile Documents/com~apple~CloudDocs/캐리_정산"
+            "~/Library/Mobile Documents/com~apple~CloudDocs/정훈_정산"
         )
         output_dir = os.path.join(icloud_base, f"{year}년_{month}월")
         os.makedirs(output_dir, exist_ok=True)
