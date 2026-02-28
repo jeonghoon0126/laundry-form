@@ -463,7 +463,7 @@ def send_email(subject: str, body: str, attachments: list):
 
 
 def send_report_email(year: int, month: int, rows: list, business_data: dict) -> bool:
-    """내부 검토용 정산 레포트 이메일 발송 (kham0126@gmail.com)"""
+    """내부 검토용 정산 레포트 이메일 발송 (HTML 테이블)"""
     if not EMAIL_PASSWORD:
         print("EMAIL_PASSWORD 미설정. 레포트 이메일 건너뜀.")
         return False
@@ -472,7 +472,6 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
 
     weekday_ko = ['월', '화', '수', '목', '금', '토', '일']
 
-    # location -> [(date, blanket, mat, pillow_cover, towel, body_towel)]
     daily = defaultdict(list)
     for row in rows:
         record_date, location, blanket, mat, pillow_cover, towel, body_towel = row
@@ -481,26 +480,26 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
     for loc in daily:
         daily[loc].sort(key=lambda x: x[0])
 
-    lines = []
-    lines.append(f"[캐리] {year}년 {month}월 정산 내부 레포트")
-    lines.append(f"레코드 {len(rows)}건 | 사업자 {len(business_data)}개")
-    lines.append("=" * 62)
+    # 공통 테이블 스타일 (인라인 CSS, Gmail 호환)
+    TH = 'style="background:#1e40af;color:#fff;padding:6px 10px;text-align:right;font-size:13px;white-space:nowrap;"'
+    TH_L = 'style="background:#1e40af;color:#fff;padding:6px 10px;text-align:left;font-size:13px;"'
+    TD = 'style="padding:5px 10px;text-align:right;font-size:13px;border-bottom:1px solid #e5e7eb;"'
+    TD_L = 'style="padding:5px 10px;text-align:left;font-size:13px;border-bottom:1px solid #e5e7eb;"'
+    TD_SUB = 'style="padding:5px 10px;text-align:right;font-size:13px;background:#eff6ff;font-weight:bold;"'
+    TD_SUB_L = 'style="padding:5px 10px;text-align:left;font-size:13px;background:#eff6ff;font-weight:bold;"'
 
     grand_total = 0
+    sections = []
 
     for reg_no, data in business_data.items():
         prices = get_prices(reg_no)
         biz_total = 0
-
-        lines.append(f"\n■ {data['name']}  ({reg_no})")
+        loc_tables = []
 
         for location in sorted(data['locations'].keys()):
             loc_rows = daily.get(location, [])
             loc_total = 0
-
-            lines.append(f"\n  ▶ {location}")
-            lines.append(f"  {'날짜':<12}{'이불':>5}{'매트':>5}{'베개커버':>7}{'타올':>5}{'바디타올':>7}  {'금액':>10}")
-            lines.append("  " + "-" * 55)
+            data_rows_html = []
 
             for record_date, blanket, mat, pillow_cover, towel, body_towel in loc_rows:
                 if blanket + mat + pillow_cover + towel + body_towel == 0:
@@ -513,31 +512,65 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
                 loc_total += row_amount
                 wd = weekday_ko[record_date.weekday()]
                 date_str = f"{record_date.month}/{record_date.day:02d}({wd})"
-                lines.append(f"  {date_str:<12}{blanket:>5}{mat:>5}{pillow_cover:>7}"
-                              f"{towel:>5}{body_towel:>7}  {row_amount:>10,}")
+                data_rows_html.append(
+                    f"<tr><td {TD_L}>{date_str}</td>"
+                    f"<td {TD}>{blanket}</td><td {TD}>{mat}</td>"
+                    f"<td {TD}>{pillow_cover}</td><td {TD}>{towel}</td>"
+                    f"<td {TD}>{body_towel}</td>"
+                    f"<td {TD}>{row_amount:,}원</td></tr>"
+                )
 
             loc_qty = data['locations'][location]
-            lines.append("  " + "-" * 55)
-            lines.append(f"  {'소계':<12}{loc_qty['blanket']:>5}{loc_qty['mat']:>5}"
-                          f"{loc_qty['pillow_cover']:>7}{loc_qty['towel']:>5}"
-                          f"{loc_qty.get('body_towel', 0):>7}  {loc_total:>10,}")
             biz_total += loc_total
+            sub_bt = loc_qty.get('body_towel', 0)
+            data_rows_html.append(
+                f"<tr><td {TD_SUB_L}>소계</td>"
+                f"<td {TD_SUB}>{loc_qty['blanket']}</td><td {TD_SUB}>{loc_qty['mat']}</td>"
+                f"<td {TD_SUB}>{loc_qty['pillow_cover']}</td><td {TD_SUB}>{loc_qty['towel']}</td>"
+                f"<td {TD_SUB}>{sub_bt}</td>"
+                f"<td {TD_SUB}>{loc_total:,}원</td></tr>"
+            )
 
-        lines.append(f"\n  {data['name']} 합계: {biz_total:,}원")
+            loc_tables.append(f"""
+<p style="margin:16px 0 6px;font-size:14px;font-weight:bold;color:#374151;">▶ {location}</p>
+<table style="border-collapse:collapse;width:100%;margin-bottom:8px;">
+  <thead><tr>
+    <th {TH_L}>날짜</th><th {TH}>이불</th><th {TH}>매트</th>
+    <th {TH}>베개커버</th><th {TH}>타올</th><th {TH}>바디타올</th><th {TH}>금액</th>
+  </tr></thead>
+  <tbody>{''.join(data_rows_html)}</tbody>
+</table>""")
+
         grand_total += biz_total
+        sections.append(f"""
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:20px;">
+  <h3 style="margin:0 0 12px;font-size:16px;color:#1e40af;">
+    {data['name']} <span style="font-size:13px;color:#6b7280;font-weight:normal;">({reg_no})</span>
+  </h3>
+  {''.join(loc_tables)}
+  <p style="text-align:right;font-size:15px;font-weight:bold;color:#1e40af;margin:8px 0 0;">
+    {data['name']} 합계: {biz_total:,}원
+  </p>
+</div>""")
 
-    lines.append("\n" + "=" * 62)
-    lines.append(f"총 매출: {grand_total:,}원")
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="font-family:'Apple SD Gothic Neo',Arial,sans-serif;max-width:720px;margin:0 auto;padding:20px;color:#111827;">
+  <h2 style="margin:0 0 4px;font-size:20px;color:#111827;">[캐리] {year}년 {month}월 정산 내부 레포트</h2>
+  <p style="margin:0 0 20px;font-size:13px;color:#6b7280;">레코드 {len(rows)}건 · 사업자 {len(business_data)}개</p>
+  {''.join(sections)}
+  <div style="background:#1e40af;color:#fff;border-radius:8px;padding:14px 20px;text-align:right;font-size:18px;font-weight:bold;">
+    2월 총 매출: {grand_total:,}원
+  </div>
+</body></html>"""
 
-    body = "\n".join(lines)
     subject = f"[캐리 레포트] {year}년 {month}월 정산 검토"
-
     try:
-        msg = MIMEMultipart()
+        msg = MIMEMultipart('alternative')
         msg['From'] = EMAIL_FROM
         msg['To'] = EMAIL_FROM
         msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        msg.attach(MIMEText(html, 'html', 'utf-8'))
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(EMAIL_FROM, EMAIL_PASSWORD)
             server.send_message(msg)
