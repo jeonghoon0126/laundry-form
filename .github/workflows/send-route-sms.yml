@@ -2,8 +2,8 @@ name: 캐리 동선 문자 발송
 
 on:
   schedule:
-    # 매일 오전 9시 KST = 00:00 UTC
-    - cron: "0 0 * * *"
+    # 월·목 오전 9시 KST = 00:00 UTC (1=월, 4=목)
+    - cron: "0 0 * * 1,4"
   workflow_dispatch:
     inputs:
       dry_run:
