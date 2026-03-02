@@ -183,21 +183,24 @@ def _send_single(api_key: str, api_secret: str, sender: str, to: str, text: str,
     date_str, salt, signature = _solapi_signature(api_key, api_secret)
     auth_header = f"HMAC-SHA256 apiKey={api_key}, date={date_str}, salt={salt}, signature={signature}"
 
-    payload = json.dumps({
-        "message": {
-            "to": to,
-            "from": sender,
-            "text": text,
-            "type": msg_type,
-        }
-    }).encode()
+    payload = json.dumps(
+        {
+            "message": {
+                "to": to,
+                "from": sender,
+                "text": text,
+                "type": msg_type,
+            }
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
 
     req = urllib.request.Request(
         "https://api.solapi.com/messages/v4/send",
         data=payload,
         headers={
             "Authorization": auth_header,
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
         },
         method="POST",
     )
