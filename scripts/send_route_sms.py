@@ -143,10 +143,12 @@ CIRCLED_NUMS = "①②③④⑤⑥⑦⑧⑨⑩"
 WEEKDAY_KO = ["월", "화", "수", "목", "금", "토", "일"]
 
 
-def build_message(today: date, route: list[str]) -> str:
+def build_message(today: date, route: list[str]) -> tuple[str, str]:
+    """LMS subject, text 반환"""
     weekday = WEEKDAY_KO[today.weekday()]
-    lines = [f"{today.month}/{today.day}({weekday}) 동선", ""]
+    subject = f"{today.month}/{today.day}({weekday}) 동선"
 
+    lines = []
     for i, loc_key in enumerate(route):
         info = LOCATIONS[loc_key]
         num = CIRCLED_NUMS[i]
@@ -165,7 +167,7 @@ def build_message(today: date, route: list[str]) -> str:
         lines.extend(notes)
 
     lines.extend(["", "안전 운전하시고 감사합니다!"])
-    return "\n".join(lines)
+    return subject, "\n".join(lines)
 
 
 # ──────────────────────────────────────────────
@@ -179,21 +181,15 @@ def _solapi_signature(api_key: str, api_secret: str) -> tuple:
     return date_str, salt, signature
 
 
-def _send_single(api_key: str, api_secret: str, sender: str, to: str, text: str, msg_type: str = "LMS") -> None:
+def _send_single(api_key: str, api_secret: str, sender: str, to: str, text: str, msg_type: str = "LMS", subject: str = "") -> None:
     date_str, salt, signature = _solapi_signature(api_key, api_secret)
     auth_header = f"HMAC-SHA256 apiKey={api_key}, date={date_str}, salt={salt}, signature={signature}"
 
-    payload = json.dumps(
-        {
-            "message": {
-                "to": to,
-                "from": sender,
-                "text": text,
-                "type": msg_type,
-            }
-        },
-        ensure_ascii=False,
-    ).encode("utf-8")
+    msg: dict = {"to": to, "from": sender, "text": text, "type": msg_type}
+    if subject:
+        msg["subject"] = subject
+
+    payload = json.dumps({"message": msg}, ensure_ascii=False).encode("utf-8")
 
     req = urllib.request.Request(
         "https://api.solapi.com/messages/v4/send",
@@ -211,14 +207,15 @@ def _send_single(api_key: str, api_secret: str, sender: str, to: str, text: str,
         raise RuntimeError(f"Solapi 발송 실패: {result}")
 
 
-def send_sms(message: str, stop_count: int) -> None:
+def send_sms(message: tuple[str, str], stop_count: int) -> None:
     api_key = os.environ["SOLAPI_API_KEY"]
     api_secret = os.environ["SOLAPI_API_SECRET"]
     sender = os.environ["SOLAPI_SENDER"]
     recipient = os.environ["RECIPIENT_PHONE"]
     owner_phone = os.environ.get("OWNER_PHONE", "")
 
-    _send_single(api_key, api_secret, sender, recipient, message, "LMS")
+    subject, body = message
+    _send_single(api_key, api_secret, sender, recipient, body, "LMS", subject)
     print(f"[OK] 기사님 SMS 발송 완료 → {recipient}")
 
     if owner_phone:
@@ -241,9 +238,10 @@ def main() -> None:
         print(f"[SKIP] {WEEKDAY_KO[today.weekday()]}요일은 발송 대상 아님")
         return
 
-    message = build_message(today, route)
+    subject, body = build_message(today, route)
     print("── 발송 메시지 ──")
-    print(message)
+    print(f"[제목] {subject}")
+    print(body)
     print("─────────────────")
 
     dry_run = os.environ.get("DRY_RUN", "false").lower() == "true"
@@ -251,7 +249,7 @@ def main() -> None:
         print("[DRY_RUN] 실제 발송 안 함")
         return
 
-    send_sms(message, len(route))
+    send_sms((subject, body), len(route))
 
 
 if __name__ == "__main__":
