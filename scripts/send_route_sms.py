@@ -1,19 +1,18 @@
 """
 캐리 세탁물 수거 동선 문자 자동 발송
-- Supabase laundry_records에서 오늘 수거 위치 조회
-- 미리 정의된 순서로 동선 구성
-- Solapi API로 기사님께 문자 발송
+- 고정 스케줄 기반 (월요일/목요일)
+- 월요일: 둘째·넷째주에 청량리 추가
+- 목요일: 장한평 포함
+- Solapi API로 기사님께 LMS 발송
 """
 
 import os
-import sys
 import hashlib
 import hmac
 import time
 import json
 import uuid
 import urllib.request
-import urllib.parse
 from datetime import datetime, date, timedelta, timezone
 from typing import Optional
 import pytz
@@ -21,214 +20,149 @@ import pytz
 KST = pytz.timezone("Asia/Seoul")
 
 # ──────────────────────────────────────────────
-# 숙소 정보 (주소 → 표시 정보 매핑)
+# 숙소 정보 (단축 주소 기준)
 # ──────────────────────────────────────────────
-LOCATIONS = {
-    "동대문구 고산자로 508-3": {
-        "order": 1,
+LOCATIONS: dict[str, dict] = {
+    "고산자로 508-3": {
         "region": "제기동",
         "name": "스테이브리즈",
-        "access": "0000* / 문 열고 바로 왼쪽",
+        "access": "0000* / 문열고 바로 왼쪽",
         "parking": None,
     },
-    "광진구 능동로 165-1": {
-        "order": 2,
+    "능동로 165-1": {
         "region": "건대",
         "name": "화양프라하임",
         "access": "#1236 / 창고 2848* / 엘베 내려서 회색문",
-        "parking": "주차 가능",
+        "parking": "주차가능",
     },
-    "동대문구 회기로 189": {
-        "order": 3,
+    "회기로 189": {
         "region": "회기",
         "name": "오를리",
         "access": "2층 바닥",
         "parking": None,
     },
-    "동대문구 장한로26나길 21": {
-        "order": 4,
+    "장한로26나길 21": {
         "region": "장한평",
         "name": "프라하임장안2",
         "access": "#1236 / 210호 1482* / 2층 210호",
         "parking": None,
     },
-    "동대문구 왕산로 200": {
-        "order": 4,  # 장한평과 동일 슬롯 (동시에 안 나옴)
+    "왕산로 200, 1004호": {
         "region": "청량리",
         "name": "롯데캐슬 SKY-L65",
         "access": "1004호 문앞 / 주차 지하2층 하역장 진입",
         "parking": None,
     },
-    "송파구 가락로28길 3-10": {
-        "order": 5,
+    "가락로28길 3-10": {
         "region": "송파",
         "name": "스테이브리즈",
         "access": "1234* / 건물 왼쪽 LOUNGE 세탁실",
         "parking": None,
     },
-    "관악구 신림동1길 19-5": {
-        "order": 6,
+    "신림동1길 19-5": {
         "region": "신림",
         "name": "스테이모먼트",
         "access": "1210# / 공동주방 지나 STAFF ONLY 문 안",
         "parking": None,
     },
-    "서대문구 연희로4길 25-7": {
-        "order": 7,
+    "연희로4길 25-7": {
         "region": "연남",
         "name": "에코리빙",
-        "access": "7777* / 반지하 라운지 자동문 앞",
+        "access": "7777* / 반지하 라운지자동문 앞",
         "parking": None,
     },
 }
 
-# laundry_records.location 값 → LOCATIONS 키 정규화 매핑
-# (시트 입력값이 다를 수 있어서 보정)
-ADDRESS_NORMALIZE = {
-    "고산자로 508-3": "동대문구 고산자로 508-3",
-    "동대문구 고산자로 508-3": "동대문구 고산자로 508-3",
-    "능동로 165-1": "광진구 능동로 165-1",
-    "광진구 능동로 165-1": "광진구 능동로 165-1",
-    "회기로 189": "동대문구 회기로 189",
-    "동대문구 회기로 189": "동대문구 회기로 189",
-    "장한로26나길 21": "동대문구 장한로26나길 21",
-    "동대문구 장한로26나길 21": "동대문구 장한로26나길 21",
-    "왕산로 200": "동대문구 왕산로 200",
-    "동대문구 왕산로 200": "동대문구 왕산로 200",
-    "가락로28길 3-10": "송파구 가락로28길 3-10",
-    "송파구 가락로28길 3-10": "송파구 가락로28길 3-10",
-    "신림동1길 19-5": "관악구 신림동1길 19-5",
-    "관악구 신림동1길 19-5": "관악구 신림동1길 19-5",
-    "연희로4길 25-7": "서대문구 연희로4길 25-7",
-    "서대문구 연희로4길 25-7": "서대문구 연희로4길 25-7",
-}
-
-
-def normalize_address(raw: str) -> Optional[str]:
-    """laundry_records.location → LOCATIONS 키로 정규화"""
-    raw = raw.strip()
-    if raw in ADDRESS_NORMALIZE:
-        return ADDRESS_NORMALIZE[raw]
-    # 부분 매칭 시도
-    for key, normalized in ADDRESS_NORMALIZE.items():
-        if key in raw or raw in key:
-            return normalized
-    return None
+# 기본 동선 (월·목 공통)
+_BASE = [
+    "고산자로 508-3",
+    "능동로 165-1",
+    "회기로 189",
+    "가락로28길 3-10",
+    "신림동1길 19-5",
+    "연희로4길 25-7",
+]
 
 
 # ──────────────────────────────────────────────
-# Supabase: 오늘 수거 위치 조회
+# 동선 계산
 # ──────────────────────────────────────────────
-def fetch_today_locations(today: date) -> list[str]:
-    """오늘 날짜의 laundry_records에서 수거 위치 목록 반환"""
-    url = os.environ["SUPABASE_URL"].rstrip("/")
-    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-    date_str = today.isoformat()
+def get_route(today: date) -> list[str]:
+    """오늘 요일·주차에 따라 방문 순서대로 location key 반환"""
+    weekday = today.weekday()
 
-    req_url = (
-        f"{url}/rest/v1/laundry_records"
-        f"?select=location"
-        f"&record_date=eq.{date_str}"
-    )
-    req = urllib.request.Request(
-        req_url,
-        headers={
-            "apikey": key,
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        },
-    )
-    with urllib.request.urlopen(req) as resp:
-        records = json.loads(resp.read())
+    if weekday == 3:  # 목요일 — 장한평 포함 (회기 다음)
+        return _BASE[:3] + ["장한로26나길 21"] + _BASE[3:]
 
-    locations = []
-    seen = set()
-    for r in records:
-        loc = normalize_address(r["location"])
-        if loc and loc not in seen:
-            seen.add(loc)
-            locations.append(loc)
-    return locations
+    if weekday == 0:  # 월요일
+        week_num = (today.day - 1) // 7 + 1  # 이번 달 몇 번째 월요일
+        if week_num % 2 == 0:  # 둘째·넷째 → 청량리 포함
+            return _BASE[:3] + ["왕산로 200, 1004호"] + _BASE[3:]
+        return list(_BASE)
+
+    return []  # 월·목 외 발송 안 함
 
 
-def fetch_next_schedule(location_key: str, after: date) -> Optional[date]:
-    """특정 위치의 다음 수거 예정일 조회 (미래 레코드)"""
-    url = os.environ["SUPABASE_URL"].rstrip("/")
-    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+def _next_thursday(today: date) -> date:
+    days = (3 - today.weekday()) % 7
+    return today + timedelta(days=days if days else 7)
 
-    # LOCATIONS 역매핑으로 원본 주소 패턴 찾기
-    info = LOCATIONS.get(location_key, {})
-    region = info.get("region", "")
 
-    req_url = (
-        f"{url}/rest/v1/laundry_records"
-        f"?select=record_date,location"
-        f"&record_date=gt.{after.isoformat()}"
-        f"&order=record_date.asc"
-        f"&limit=30"
-    )
-    req = urllib.request.Request(
-        req_url,
-        headers={
-            "apikey": key,
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        },
-    )
-    with urllib.request.urlopen(req) as resp:
-        records = json.loads(resp.read())
+def _next_conditional_monday(today: date) -> tuple[date, str]:
+    """다음 2번째 또는 4번째 월요일과 '둘째주'/'넷째주' 레이블 반환"""
+    days = (0 - today.weekday()) % 7
+    candidate = today + timedelta(days=days if days else 7)
+    while True:
+        week_num = (candidate.day - 1) // 7 + 1
+        if week_num % 2 == 0:
+            label = "둘째주" if week_num == 2 else "넷째주"
+            return candidate, label
+        candidate += timedelta(days=7)
 
-    for r in records:
-        normalized = normalize_address(r["location"])
-        if normalized == location_key:
-            return date.fromisoformat(r["record_date"])
-    return None
+
+def get_next_notes(today: date, route: list[str]) -> list[str]:
+    """오늘 동선에 없는 조건부 숙소 다음 일정 안내 문구 생성"""
+    notes = []
+    weekday = today.weekday()
+
+    if "왕산로 200, 1004호" not in route:
+        next_mon, label = _next_conditional_monday(today)
+        notes.append(f"청량리는 {label} 월요일({next_mon.month}/{next_mon.day})")
+
+    if "장한로26나길 21" not in route:
+        next_thu = _next_thursday(today)
+        notes.append(f"장한평은 목요일({next_thu.month}/{next_thu.day})")
+
+    return notes
 
 
 # ──────────────────────────────────────────────
-# 동선 메시지 생성
+# 메시지 생성
 # ──────────────────────────────────────────────
 CIRCLED_NUMS = "①②③④⑤⑥⑦⑧⑨⑩"
 WEEKDAY_KO = ["월", "화", "수", "목", "금", "토", "일"]
 
 
-def build_message(today: date, location_keys: list[str]) -> str:
-    """기사님용 동선 문자 메시지 생성"""
+def build_message(today: date, route: list[str]) -> str:
     weekday = WEEKDAY_KO[today.weekday()]
-    date_label = f"{today.month}/{today.day}({weekday})"
+    lines = [f"{today.month}/{today.day}({weekday}) 동선", ""]
 
-    lines = [f"[Web발신]", f"{date_label} 동선", ""]
-
-    # 순서 정렬
-    sorted_locs = sorted(location_keys, key=lambda k: LOCATIONS[k]["order"])
-
-    for i, loc_key in enumerate(sorted_locs):
+    for i, loc_key in enumerate(route):
         info = LOCATIONS[loc_key]
         num = CIRCLED_NUMS[i]
         lines.append(f"{num} {info['region']} | {info['name']}")
-        lines.append(loc_key)  # 전체 주소
+        lines.append("")
+        lines.append(loc_key)
         lines.append(info["access"])
         if info.get("parking"):
             lines.append(info["parking"])
-        if i < len(sorted_locs) - 1:
+        if i < len(route) - 1:
             lines.append("↓")
 
-    # 오늘 빠진 위치의 다음 일정 안내
-    all_keys = set(LOCATIONS.keys())
-    missing_keys = all_keys - set(location_keys)
-    next_notes = []
-    for key in missing_keys:
-        next_date = fetch_next_schedule(key, today)
-        if next_date:
-            info = LOCATIONS[key]
-            next_notes.append(
-                f"{info['region']}({info['name']})은 "
-                f"{next_date.month}/{next_date.day}"
-            )
-
-    if next_notes:
+    notes = get_next_notes(today, route)
+    if notes:
         lines.append("")
-        lines.extend(next_notes)
+        lines.extend(notes)
 
     lines.extend(["", "안전 운전하시고 감사합니다!"])
     return "\n".join(lines)
@@ -238,7 +172,6 @@ def build_message(today: date, location_keys: list[str]) -> str:
 # Solapi SMS 발송
 # ──────────────────────────────────────────────
 def _solapi_signature(api_key: str, api_secret: str) -> tuple:
-    """Solapi HMAC-SHA256 서명 생성 (ISO 8601 date + random salt)"""
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     salt = str(uuid.uuid4()).replace("-", "")[:20]
     msg = date_str + salt
@@ -247,9 +180,8 @@ def _solapi_signature(api_key: str, api_secret: str) -> tuple:
 
 
 def _send_single(api_key: str, api_secret: str, sender: str, to: str, text: str, msg_type: str = "LMS") -> None:
-    """Solapi API로 단건 발송"""
-    now_ms, salt, signature = _solapi_signature(api_key, api_secret)
-    auth_header = f"HMAC-SHA256 apiKey={api_key}, date={now_ms}, salt={salt}, signature={signature}"
+    date_str, salt, signature = _solapi_signature(api_key, api_secret)
+    auth_header = f"HMAC-SHA256 apiKey={api_key}, date={date_str}, salt={salt}, signature={signature}"
 
     payload = json.dumps({
         "message": {
@@ -277,18 +209,15 @@ def _send_single(api_key: str, api_secret: str, sender: str, to: str, text: str,
 
 
 def send_sms(message: str, stop_count: int) -> None:
-    """기사님께 동선 LMS 발송 + 오너에게 확인 SMS 발송"""
     api_key = os.environ["SOLAPI_API_KEY"]
     api_secret = os.environ["SOLAPI_API_SECRET"]
     sender = os.environ["SOLAPI_SENDER"]
     recipient = os.environ["RECIPIENT_PHONE"]
     owner_phone = os.environ.get("OWNER_PHONE", "")
 
-    # 기사님 동선 발송
     _send_single(api_key, api_secret, sender, recipient, message, "LMS")
     print(f"[OK] 기사님 SMS 발송 완료 → {recipient}")
 
-    # 오너 확인 알림 (OWNER_PHONE 설정 시)
     if owner_phone:
         notify_text = f"[캐리] 동선 문자 발송 완료 ({stop_count}개 스톱)"
         _send_single(api_key, api_secret, sender, owner_phone, notify_text, "SMS")
@@ -300,29 +229,16 @@ def send_sms(message: str, stop_count: int) -> None:
 # ──────────────────────────────────────────────
 def main() -> None:
     test_date = os.environ.get("TEST_DATE")
-    if test_date:
-        today = date.fromisoformat(test_date)
-    else:
-        today = datetime.now(KST).date()
+    today = date.fromisoformat(test_date) if test_date else datetime.now(KST).date()
 
     print(f"[캐리 동선 발송] {today} ({WEEKDAY_KO[today.weekday()]})")
 
-    location_keys = fetch_today_locations(today)
-    if not location_keys:
-        print(f"[SKIP] {today} 수거 레코드 없음 — 발송 안 함")
-        sys.exit(0)
+    route = get_route(today)
+    if not route:
+        print(f"[SKIP] {WEEKDAY_KO[today.weekday()]}요일은 발송 대상 아님")
+        return
 
-    known = [k for k in location_keys if k in LOCATIONS]
-    unknown = [k for k in location_keys if k not in LOCATIONS]
-
-    if unknown:
-        print(f"[WARN] 매핑 없는 주소: {unknown}")
-
-    if not known:
-        print("[SKIP] 인식된 주소 없음")
-        sys.exit(0)
-
-    message = build_message(today, known)
+    message = build_message(today, route)
     print("── 발송 메시지 ──")
     print(message)
     print("─────────────────")
@@ -332,7 +248,7 @@ def main() -> None:
         print("[DRY_RUN] 실제 발송 안 함")
         return
 
-    send_sms(message, len(known))
+    send_sms(message, len(route))
 
 
 if __name__ == "__main__":

@@ -2,8 +2,8 @@ name: 캐리 동선 문자 발송
 
 on:
   schedule:
-    # 월·목 오전 9시 KST = 00:00 UTC (1=월, 4=목)
-    - cron: "0 0 * * 1,4"
+    # 월·목 오전 10시 KST = 01:00 UTC (1=월, 4=목)
+    - cron: "0 1 * * 1,4"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -34,8 +34,6 @@ jobs:
 
       - name: 동선 문자 발송
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SOLAPI_API_KEY: ${{ secrets.SOLAPI_API_KEY }}
           SOLAPI_API_SECRET: ${{ secrets.SOLAPI_API_SECRET }}
           SOLAPI_SENDER: ${{ secrets.SOLAPI_SENDER }}
