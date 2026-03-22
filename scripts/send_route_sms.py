@@ -23,6 +23,12 @@ KST = pytz.timezone("Asia/Seoul")
 # 숙소 정보 (단축 주소 기준)
 # ──────────────────────────────────────────────
 LOCATIONS: dict[str, dict] = {
+    "장충단로 225": {
+        "region": "장충동",
+        "name": "메종드브릭",
+        "access": "1층 빈 상가 / 자물쇠 2848*",
+        "parking": None,
+    },
     "고산자로 508-3": {
         "region": "제기동",
         "name": "스테이브리즈",
@@ -75,6 +81,7 @@ LOCATIONS: dict[str, dict] = {
 
 # 기본 동선 (월·목 공통)
 _BASE = [
+    "장충단로 225",
     "고산자로 508-3",
     "능동로 165-1",
     "회기로 189",
@@ -92,12 +99,12 @@ def get_route(today: date) -> list[str]:
     weekday = today.weekday()
 
     if weekday == 3:  # 목요일 — 장한평 포함 (회기 다음)
-        return _BASE[:3] + ["장한로26나길 21"] + _BASE[3:]
+        return _BASE[:4] + ["장한로26나길 21"] + _BASE[4:]
 
     if weekday == 0:  # 월요일
         week_num = (today.day - 1) // 7 + 1  # 이번 달 몇 번째 월요일
         if week_num % 2 == 0:  # 둘째·넷째 → 청량리 포함
-            return _BASE[:3] + ["왕산로 200, 1004호"] + _BASE[3:]
+            return _BASE[:4] + ["왕산로 200, 1004호"] + _BASE[4:]
         return list(_BASE)
 
     return []  # 월·목 외 발송 안 함

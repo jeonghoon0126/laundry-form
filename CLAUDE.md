@@ -1,0 +1,36 @@
+# 세탁물 수량 관리 앱 (캐리 세탁 정산)
+
+- GitHub: jeonghoon0126/laundry-form (개인 계정)
+- 기술: HTML (index.html) + Python scripts
+- Supabase: xlbckmqdzzkwtboscjgr (세탁물 앱 전용)
+
+## 스크립트
+
+- scripts/generate_invoices.py — 월말 정산 자동 실행 (매월 말일 12시 KST)
+- scripts/send_route_sms.py — 캐리 동선 문자 발송 (GitHub Actions, 09:00 KST)
+
+## 배포
+
+push → GitHub Actions 자동 실행
+워크플로우: .github/workflows/send-route-sms.yml
+
+## 테스트
+
+DRY_RUN=true → 실제 발송 없이 메시지 확인만
+TEST_DATE=YYYY-MM-DD → 특정 날짜 데이터로 테스트
+
+## 숙소 (9개)
+장충동(메종드브릭) / 제기동(스테이브리즈) / 건대(화양프라하임) / 회기(오를리) / 장한평(프라하임장안2) / 청량리(롯데캐슬, 장한평 동일 슬롯) / 송파(스테이브리즈) / 신림(스테이모먼트) / 연남(에코리빙)
+
+## 사업자 매핑
+- 서대문구 연희로4길 25-7 / 동대문구 고산자로 508-3 / 동대문구 왕산로 200 / 동대문구 장한로26나길 21 / 광진구 능동로 165-1 / 송파구 가락로28길 3-10 → 767-87-02214 주식회사 콥스 남택호
+- 동대문구 회기로 189 → 419-11-02853 오를리(Orly) 김지혜
+- 관악구 신림동1길 19-5 → 461-86-03598 주식회사스테이모먼트 유경민
+
+## 단가
+이불 3,000 / 매트 2,000 / 베개커버 250 / 타올 500 / 바디타올 800
+오를리 예외: 이불 3,000 / 베개커버 250 / 매트 1,500
+
+## 주의
+- Solapi 발신: HMAC-SHA256 인증, ISO8601 date + uuid salt
+- GitHub Secrets 7개 등록 완료 (api-keys.md 참조)
