@@ -26,7 +26,7 @@ LOCATIONS: dict[str, dict] = {
     "장충단로 225": {
         "region": "장충동",
         "name": "메종드브릭",
-        "access": "1층 빈 상가 / 자물쇠 2848*",
+        "access": "1층 키오스크 옆",
         "parking": None,
     },
     "고산자로 508-3": {
