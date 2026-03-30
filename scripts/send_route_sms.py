@@ -83,8 +83,8 @@ LOCATIONS: dict[str, dict] = {
 _BASE = [
     "장충단로 225",
     "고산자로 508-3",
-    "능동로 165-1",
     "회기로 189",
+    "능동로 165-1",
     "가락로28길 3-10",
     "신림동1길 19-5",
     "연희로4길 25-7",
@@ -103,8 +103,8 @@ def get_route(today: date) -> list[str]:
 
     if weekday == 0:  # 월요일
         week_num = (today.day - 1) // 7 + 1  # 이번 달 몇 번째 월요일
-        if week_num % 2 == 0:  # 둘째·넷째 → 청량리 포함
-            return _BASE[:4] + ["왕산로 200, 1004호"] + _BASE[4:]
+        if week_num % 2 == 0:  # 둘째·넷째 → 청량리 포함 (회기 다음, 건대 전)
+            return _BASE[:3] + ["왕산로 200, 1004호"] + _BASE[3:]
         return list(_BASE)
 
     return []  # 월·목 외 발송 안 함
