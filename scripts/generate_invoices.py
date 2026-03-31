@@ -69,6 +69,7 @@ PRICES = {
     'pillow_cover': 250,   # 베개커버
     'towel': 500,          # 타올
     'body_towel': 800,     # 바디타올
+    'pillow_fill': 5000,   # 배게 솜
 }
 
 # 사업자번호별 단가 override (기본값과 다른 항목만 기재)
@@ -86,6 +87,7 @@ ITEM_NAMES = {
     'pillow_cover': '베개커버',
     'towel': '타올',
     'body_towel': '바디타올',
+    'pillow_fill': '배게 솜',
 }
 
 # ============================================================
@@ -136,7 +138,7 @@ def get_monthly_data(year: int, month: int) -> list:
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT record_date, location, blanket, mat, pillow_cover, towel, body_towel
+        SELECT record_date, location, blanket, mat, pillow_cover, towel, body_towel, pillow_fill
         FROM laundry_records
         WHERE EXTRACT(YEAR FROM record_date) = %s
           AND EXTRACT(MONTH FROM record_date) = %s
@@ -155,7 +157,7 @@ def aggregate_by_business(rows: list) -> dict:
     business_data = {}
 
     for row in rows:
-        record_date, location, blanket, mat, pillow_cover, towel, body_towel = row
+        record_date, location, blanket, mat, pillow_cover, towel, body_towel, pillow_fill = row
 
         if location not in BUSINESS_MAP:
             print(f"알 수 없는 숙소: {location}")
@@ -174,7 +176,7 @@ def aggregate_by_business(rows: list) -> dict:
         if location not in business_data[reg_no]['locations']:
             business_data[reg_no]['locations'][location] = {
                 'blanket': 0, 'mat': 0, 'pillow_cover': 0,
-                'towel': 0, 'body_towel': 0
+                'towel': 0, 'body_towel': 0, 'pillow_fill': 0
             }
 
         loc_data = business_data[reg_no]['locations'][location]
@@ -183,6 +185,7 @@ def aggregate_by_business(rows: list) -> dict:
         loc_data['pillow_cover'] += pillow_cover or 0
         loc_data['towel'] += towel or 0
         loc_data['body_towel'] += body_towel or 0
+        loc_data['pillow_fill'] += pillow_fill or 0
 
     return business_data
 
@@ -487,7 +490,8 @@ def _get_6month_trend(year: int, month: int) -> list:
                    COALESCE(SUM(mat),0)          AS mat,
                    COALESCE(SUM(pillow_cover),0) AS pillow_cover,
                    COALESCE(SUM(towel),0)        AS towel,
-                   COALESCE(SUM(body_towel),0)   AS body_towel
+                   COALESCE(SUM(body_towel),0)   AS body_towel,
+                   COALESCE(SUM(pillow_fill),0)  AS pillow_fill
             FROM laundry_records
             WHERE record_date >= make_date(%s, %s, 1)
               AND record_date <  make_date(%s, %s, 1) + INTERVAL '1 month'
@@ -503,12 +507,12 @@ def _get_6month_trend(year: int, month: int) -> list:
 
     # 월별 합산
     monthly = {(y, m): 0 for y, m in months}
-    for row_y, row_m, loc, bl, mt, pc, tw, bt in loc_rows:
+    for row_y, row_m, loc, bl, mt, pc, tw, bt, pf in loc_rows:
         if loc not in BUSINESS_MAP:
             continue
         reg_no = BUSINESS_MAP[loc][0]
         p = get_prices(reg_no)
-        amt = bl*p['blanket'] + mt*p['mat'] + pc*p['pillow_cover'] + tw*p['towel'] + bt*p['body_towel']
+        amt = bl*p['blanket'] + mt*p['mat'] + pc*p['pillow_cover'] + tw*p['towel'] + bt*p['body_towel'] + pf*p['pillow_fill']
         key = (int(row_y), int(row_m))
         if key in monthly:
             monthly[key] += amt
@@ -528,9 +532,9 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
 
     daily = defaultdict(list)
     for row in rows:
-        record_date, location, blanket, mat, pillow_cover, towel, body_towel = row
+        record_date, location, blanket, mat, pillow_cover, towel, body_towel, pillow_fill = row
         daily[location].append((record_date, blanket or 0, mat or 0,
-                                 pillow_cover or 0, towel or 0, body_towel or 0))
+                                 pillow_cover or 0, towel or 0, body_towel or 0, pillow_fill or 0))
     for loc in daily:
         daily[loc].sort(key=lambda x: x[0])
 
@@ -555,14 +559,15 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
             loc_total = 0
             data_rows_html = []
 
-            for record_date, blanket, mat, pillow_cover, towel, body_towel in loc_rows:
-                if blanket + mat + pillow_cover + towel + body_towel == 0:
+            for record_date, blanket, mat, pillow_cover, towel, body_towel, pillow_fill in loc_rows:
+                if blanket + mat + pillow_cover + towel + body_towel + pillow_fill == 0:
                     continue
                 row_amount = (blanket * prices.get('blanket', 0) +
                               mat * prices.get('mat', 0) +
                               pillow_cover * prices.get('pillow_cover', 0) +
                               towel * prices.get('towel', 0) +
-                              body_towel * prices.get('body_towel', 0))
+                              body_towel * prices.get('body_towel', 0) +
+                              pillow_fill * prices.get('pillow_fill', 0))
                 loc_total += row_amount
                 wd = weekday_ko[record_date.weekday()]
                 date_str = f"{record_date.month}/{record_date.day:02d}({wd})"
@@ -570,18 +575,19 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
                     f"<tr><td {TD_L}>{date_str}</td>"
                     f"<td {TD}>{blanket}</td><td {TD}>{mat}</td>"
                     f"<td {TD}>{pillow_cover}</td><td {TD}>{towel}</td>"
-                    f"<td {TD}>{body_towel}</td>"
+                    f"<td {TD}>{body_towel}</td><td {TD}>{pillow_fill}</td>"
                     f"<td {TD}>{row_amount:,}원</td></tr>"
                 )
 
             loc_qty = data['locations'][location]
             biz_total += loc_total
             sub_bt = loc_qty.get('body_towel', 0)
+            sub_pf = loc_qty.get('pillow_fill', 0)
             data_rows_html.append(
                 f"<tr><td {TD_SUB_L}>소계</td>"
                 f"<td {TD_SUB}>{loc_qty['blanket']}</td><td {TD_SUB}>{loc_qty['mat']}</td>"
                 f"<td {TD_SUB}>{loc_qty['pillow_cover']}</td><td {TD_SUB}>{loc_qty['towel']}</td>"
-                f"<td {TD_SUB}>{sub_bt}</td>"
+                f"<td {TD_SUB}>{sub_bt}</td><td {TD_SUB}>{sub_pf}</td>"
                 f"<td {TD_SUB}>{loc_total:,}원</td></tr>"
             )
 
@@ -590,7 +596,7 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
 <table style="border-collapse:collapse;width:100%;margin-bottom:8px;">
   <thead><tr>
     <th {TH_L}>날짜</th><th {TH}>이불</th><th {TH}>매트</th>
-    <th {TH}>베개커버</th><th {TH}>타올</th><th {TH}>바디타올</th><th {TH}>금액</th>
+    <th {TH}>베개커버</th><th {TH}>타올</th><th {TH}>바디타올</th><th {TH}>배게 솜</th><th {TH}>금액</th>
   </tr></thead>
   <tbody>{''.join(data_rows_html)}</tbody>
 </table>""")
@@ -771,7 +777,7 @@ def update_invoice_sheets(year: int, month: int, rows: list) -> bool:
 
     location_totals = {}
     for row in rows:
-        _, location, blanket, mat, pillow_cover, towel, _ = row
+        _, location, blanket, mat, pillow_cover, towel, _, _ = row
         if location not in location_totals:
             location_totals[location] = {'blanket': 0, 'mat': 0, 'pillow_cover': 0, 'towel': 0}
         location_totals[location]['blanket'] += blanket or 0
