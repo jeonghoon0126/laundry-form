@@ -869,13 +869,13 @@ def main():
 
     for reg_no, data in business_data.items():
         pdf_buffer = generate_pdf(reg_no, data, year, month)
-        filename = f"{year}년_{month}월_거래명세서_{data['name'].replace(' ', '_')}.pdf"
+        filename = f"{year}년 {month}월 거래명세서 ({data['name']}).pdf"
         attachments.append((filename, pdf_buffer))
         print(f"PDF 생성: {filename}")
 
     # Excel 생성
     excel_buffer = generate_excel(business_data, year, month)
-    excel_filename = f"홈택스_세금계산서_{year}년{month}월.xlsx"
+    excel_filename = f"{year}년 {month}월 세금계산서 (홈택스).xlsx"
     attachments.append((excel_filename, excel_buffer))
     print(f"Excel 생성: {excel_filename}")
 
@@ -890,17 +890,14 @@ def main():
             total_amount += item['amount']
 
     # 이메일 발송
-    subject = f"[캐리] {year}년 {month}월 세탁물 정산 - 세금계산서 발행 요청"
-    body = f"""안녕하세요, {year}년 {month}월 세탁물 정산 내역입니다.
+    subject = f"[캐리] {year}년 {month}월 거래명세서"
+    body = f"""{year}년 {month}월 세탁물 정산 내역입니다.
 
-총 금액: {total_amount:,}원
-사업자 수: {len(business_data)}개
+총 금액: {total_amount:,}원 (사업자 {len(business_data)}개)
 
-첨부파일:
-- 사업자별 거래명세서 PDF ({len(business_data)}개)
-- 홈택스 세금계산서 Excel (1개)
-
-홈택스에서 세금계산서 발행 후 회신 부탁드립니다.
+첨부:
+- 거래명세서 PDF {len(business_data)}개
+- 세금계산서 Excel (홈택스 일괄발행용) 1개
 
 감사합니다.
 """
