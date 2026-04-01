@@ -51,7 +51,7 @@ jobs:
       - name: Install dependencies
         if: steps.check_day.outputs.run == 'true'
         run: |
-          pip install psycopg2-binary reportlab openpyxl "google-auth>=2.0,<2.49"
+          pip install psycopg2-binary reportlab openpyxl "google-auth>=2.0,<2.49" requests
 
       - name: Generate invoices
         if: steps.check_day.outputs.run == 'true'
