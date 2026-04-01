@@ -38,7 +38,8 @@ SUPABASE_URI = os.environ.get('SUPABASE_URI',
 
 # 이메일 설정
 EMAIL_FROM = "kham0126@gmail.com"
-EMAIL_TO = "kham0126@gmail.com"
+EMAIL_TO = os.environ.get('EMAIL_TO', 'kham0126@gmail.com').strip()
+EMAIL_CC = os.environ.get('EMAIL_CC', '').strip()  # 추가 수신자 (선택)
 EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD', '').strip()
 
 # 공급자 정보
@@ -52,6 +53,7 @@ SUPPLIER = {
 
 # 숙소 → 사업자 매핑
 BUSINESS_MAP = {
+    '중구 장충단로 225': ('554-88-03481', '주식회사 모어브릿지', '홍석화'),
     '서대문구 연희로4길 25-7': ('767-87-02214', '주식회사 콥스', '남택호'),
     '동대문구 고산자로 508-3': ('767-87-02214', '주식회사 콥스', '남택호'),
     '동대문구 왕산로 200, 1004호': ('767-87-02214', '주식회사 콥스', '남택호'),
@@ -109,6 +111,7 @@ SHEETS_FIXED_COSTS = {
 }
 
 INVOICE_SHEET_MAP = {
+    '중구 장충단로 225':            'invoice(거래명세서)_장충동 메종드브릭',
     '동대문구 회기로 189':          'invoice(거래명세서)_Orly',
     '관악구 신림동1길 19-5':        'invoice(거래명세서)_스테이모먼트',
     '서대문구 연희로4길 25-7':      'invoice(거래명세서)_서대문구 연희로4길 25-7, 연남에코리빙',
@@ -441,6 +444,8 @@ def send_email(subject: str, body: str, attachments: list):
     msg = MIMEMultipart()
     msg['From'] = EMAIL_FROM
     msg['To'] = EMAIL_TO
+    if EMAIL_CC:
+        msg['Cc'] = EMAIL_CC
     msg['Subject'] = subject
 
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
@@ -452,13 +457,17 @@ def send_email(subject: str, body: str, attachments: list):
         part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
         msg.attach(part)
 
+    recipients = [EMAIL_TO] + ([EMAIL_CC] if EMAIL_CC else [])
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(EMAIL_FROM, EMAIL_PASSWORD)
-        server.send_message(msg)
+        refused = server.sendmail(EMAIL_FROM, recipients, msg.as_string())
         server.quit()
-        print("이메일 발송 완료")
+        if refused:
+            print(f"이메일 일부 수신 거부: {refused}")
+        else:
+            print(f"이메일 발송 완료 → {', '.join(recipients)}")
         return True
     except Exception as e:
         print(f"이메일 발송 실패: {e}")
@@ -656,14 +665,20 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
     subject = f"[캐리 레포트] {year}년 {month}월 정산 검토"
     try:
         msg = MIMEMultipart('alternative')
+        recipients = [EMAIL_TO] + ([EMAIL_CC] if EMAIL_CC else [])
         msg['From'] = EMAIL_FROM
-        msg['To'] = EMAIL_FROM
+        msg['To'] = EMAIL_TO
+        if EMAIL_CC:
+            msg['Cc'] = EMAIL_CC
         msg['Subject'] = subject
         msg.attach(MIMEText(html, 'html', 'utf-8'))
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(EMAIL_FROM, EMAIL_PASSWORD)
-            server.send_message(msg)
-        print("레포트 이메일 발송 완료")
+            refused = server.sendmail(EMAIL_FROM, recipients, msg.as_string())
+        if refused:
+            print(f"레포트 이메일 일부 수신 거부: {refused}")
+        else:
+            print(f"레포트 이메일 발송 완료 → {', '.join(recipients)}")
         return True
     except Exception as e:
         print(f"레포트 이메일 발송 실패: {e}")
@@ -690,11 +705,15 @@ def get_sheets_token() -> str:
         )
         creds.refresh(google.auth.transport.requests.Request())
         return creds.token
-    except ImportError:
-        print("google-auth 미설치. pip install google-auth 필요")
+    except ImportError as e:
+        import traceback
+        print(f"google-auth import 실패: {e}")
+        traceback.print_exc()
         return ''
     except Exception as e:
+        import traceback
         print(f"Sheets 인증 실패: {e}")
+        traceback.print_exc()
         return ''
 
 
@@ -726,7 +745,7 @@ def update_profit_sheet(year: int, month: int, total_amount: int) -> bool:
     """캐리_고객 '영업이익계산' 시트 업데이트"""
     token = get_sheets_token()
     if not token:
-        print("SHEETS_SERVICE_ACCOUNT 미설정. 영업이익계산 시트 업데이트 건너뜀.")
+        print("Sheets 토큰 없음. 영업이익계산 시트 업데이트 건너뜀.")
         return False
 
     try:
@@ -772,7 +791,7 @@ def update_invoice_sheets(year: int, month: int, rows: list) -> bool:
     """캐리_정산 각 invoice 시트 수량/월 업데이트"""
     token = get_sheets_token()
     if not token:
-        print("SHEETS_SERVICE_ACCOUNT 미설정. 거래명세서 시트 업데이트 건너뜀.")
+        print("Sheets 토큰 없음. 거래명세서 시트 업데이트 건너뜀.")
         return False
 
     location_totals = {}
