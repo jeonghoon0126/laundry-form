@@ -454,7 +454,7 @@ def send_email(subject: str, body: str, attachments: list):
         part = MIMEBase('application', 'octet-stream')
         part.set_payload(data.read())
         encoders.encode_base64(part)
-        part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+        part.add_header('Content-Disposition', 'attachment', filename=filename)
         msg.attach(part)
 
     recipients = [EMAIL_TO] + ([EMAIL_CC] if EMAIL_CC else [])
