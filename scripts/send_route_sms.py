@@ -1,7 +1,8 @@
 """
 캐리 세탁물 수거 동선 문자 자동 발송
 - 고정 스케줄 기반 (월요일/목요일)
-- 월요일: 둘째·넷째주에 청량리 추가
+- 2026-04-09(목): 청량리 1회 추가
+- 2026-04-13(월)부터: 2주 간격 월요일 청량리 추가
 - 목요일: 장한평 포함
 - Solapi API로 기사님께 LMS 발송
 """
@@ -89,25 +90,56 @@ _BASE = [
     "신림동1길 19-5",
     "연희로4길 25-7",
 ]
+WANGSANRO_KEY = "왕산로 200, 1004호"
+JANGHANPYEONG_KEY = "장한로26나길 21"
+WANGSANRO_ONE_OFF_DATE = date(2026, 4, 9)
+WANGSANRO_BIWEEKLY_START = date(2026, 4, 13)
+
+
+def _insert_after(route: list[str], after_key: str, target_key: str) -> list[str]:
+    idx = route.index(after_key) + 1
+    return route[:idx] + [target_key] + route[idx:]
+
+
+def _should_include_wangsanro(today: date) -> bool:
+    if today == WANGSANRO_ONE_OFF_DATE:
+        return True
+    if today.weekday() != 0 or today < WANGSANRO_BIWEEKLY_START:
+        return False
+    return (today - WANGSANRO_BIWEEKLY_START).days % 14 == 0
+
+
+def _next_wangsanro_date(today: date) -> date:
+    candidates = []
+    if WANGSANRO_ONE_OFF_DATE > today:
+        candidates.append(WANGSANRO_ONE_OFF_DATE)
+    if today < WANGSANRO_BIWEEKLY_START:
+        candidates.append(WANGSANRO_BIWEEKLY_START)
+    else:
+        days_since_start = (today - WANGSANRO_BIWEEKLY_START).days
+        next_offset = (days_since_start // 14 + 1) * 14
+        candidates.append(WANGSANRO_BIWEEKLY_START + timedelta(days=next_offset))
+    return min(candidates)
 
 
 # ──────────────────────────────────────────────
 # 동선 계산
 # ──────────────────────────────────────────────
 def get_route(today: date) -> list[str]:
-    """오늘 요일·주차에 따라 방문 순서대로 location key 반환"""
+    """오늘 일정에 따라 방문 순서대로 location key 반환"""
     weekday = today.weekday()
 
-    if weekday == 3:  # 목요일 — 장한평 포함 (회기 다음)
-        return _BASE[:4] + ["장한로26나길 21"] + _BASE[4:]
+    if weekday not in (0, 3):
+        return []  # 월·목 외 발송 안 함
 
-    if weekday == 0:  # 월요일
-        week_num = (today.day - 1) // 7 + 1  # 이번 달 몇 번째 월요일
-        if week_num % 2 == 0:  # 둘째·넷째 → 청량리 포함 (회기 다음, 건대 전)
-            return _BASE[:3] + ["왕산로 200, 1004호"] + _BASE[3:]
-        return list(_BASE)
+    route = list(_BASE)
+    if weekday == 3:  # 목요일 — 장한평 포함 (건대 다음)
+        route = _insert_after(route, "능동로 165-1", JANGHANPYEONG_KEY)
 
-    return []  # 월·목 외 발송 안 함
+    if _should_include_wangsanro(today):  # 청량리 포함 (회기 다음, 건대 전)
+        route = _insert_after(route, "회기로 189", WANGSANRO_KEY)
+
+    return route
 
 
 def _next_thursday(today: date) -> date:
@@ -115,28 +147,16 @@ def _next_thursday(today: date) -> date:
     return today + timedelta(days=days if days else 7)
 
 
-def _next_conditional_monday(today: date) -> tuple[date, str]:
-    """다음 2번째 또는 4번째 월요일과 '둘째주'/'넷째주' 레이블 반환"""
-    days = (0 - today.weekday()) % 7
-    candidate = today + timedelta(days=days if days else 7)
-    while True:
-        week_num = (candidate.day - 1) // 7 + 1
-        if week_num % 2 == 0:
-            label = "둘째주" if week_num == 2 else "넷째주"
-            return candidate, label
-        candidate += timedelta(days=7)
-
-
 def get_next_notes(today: date, route: list[str]) -> list[str]:
     """오늘 동선에 없는 조건부 숙소 다음 일정 안내 문구 생성"""
     notes = []
-    weekday = today.weekday()
 
-    if "왕산로 200, 1004호" not in route:
-        next_mon, label = _next_conditional_monday(today)
-        notes.append(f"청량리는 {label} 월요일({next_mon.month}/{next_mon.day})")
+    if WANGSANRO_KEY not in route:
+        next_wangsanro = _next_wangsanro_date(today)
+        next_weekday = WEEKDAY_KO[next_wangsanro.weekday()]
+        notes.append(f"청량리는 다음 일정 {next_wangsanro.month}/{next_wangsanro.day}({next_weekday})")
 
-    if "장한로26나길 21" not in route:
+    if JANGHANPYEONG_KEY not in route:
         next_thu = _next_thursday(today)
         notes.append(f"장한평은 목요일({next_thu.month}/{next_thu.day})")
 

@@ -9,6 +9,10 @@
 - scripts/generate_invoices.py — 월말 정산 자동 실행 (매월 말일 12시 KST)
 - scripts/send_route_sms.py — 캐리 동선 문자 발송 (GitHub Actions, 09:00 KST)
 
+## 동선 특이사항
+
+- `왕산로 200, 1004호`는 2026-04-09(목) 1회 추가, 2026-04-13(월)부터 2주 간격 월요일마다 포함
+
 ## 배포
 
 push → GitHub Actions 자동 실행
