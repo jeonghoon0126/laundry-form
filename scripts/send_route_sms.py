@@ -2,7 +2,7 @@
 캐리 세탁물 수거 동선 문자 자동 발송
 - 고정 스케줄 기반 (월요일/목요일)
 - 2026-04-09(목): 청량리 1회 추가
-- 2026-04-13(월)부터: 2주 간격 월요일 청량리 추가
+- 2026-04-06(월) 기준: 2주 간격 월요일 청량리 추가
 - 목요일: 장한평 포함
 - Solapi API로 기사님께 LMS 발송
 """
@@ -93,7 +93,7 @@ _BASE = [
 WANGSANRO_KEY = "왕산로 200, 1004호"
 JANGHANPYEONG_KEY = "장한로26나길 21"
 WANGSANRO_ONE_OFF_DATE = date(2026, 4, 9)
-WANGSANRO_BIWEEKLY_START = date(2026, 4, 13)
+WANGSANRO_BIWEEKLY_ANCHOR = date(2026, 4, 6)
 
 
 def _insert_after(route: list[str], after_key: str, target_key: str) -> list[str]:
@@ -104,21 +104,21 @@ def _insert_after(route: list[str], after_key: str, target_key: str) -> list[str
 def _should_include_wangsanro(today: date) -> bool:
     if today == WANGSANRO_ONE_OFF_DATE:
         return True
-    if today.weekday() != 0 or today < WANGSANRO_BIWEEKLY_START:
+    if today.weekday() != 0 or today < WANGSANRO_BIWEEKLY_ANCHOR:
         return False
-    return (today - WANGSANRO_BIWEEKLY_START).days % 14 == 0
+    return (today - WANGSANRO_BIWEEKLY_ANCHOR).days % 14 == 0
 
 
 def _next_wangsanro_date(today: date) -> date:
     candidates = []
     if WANGSANRO_ONE_OFF_DATE > today:
         candidates.append(WANGSANRO_ONE_OFF_DATE)
-    if today < WANGSANRO_BIWEEKLY_START:
-        candidates.append(WANGSANRO_BIWEEKLY_START)
+    if today < WANGSANRO_BIWEEKLY_ANCHOR:
+        candidates.append(WANGSANRO_BIWEEKLY_ANCHOR)
     else:
-        days_since_start = (today - WANGSANRO_BIWEEKLY_START).days
-        next_offset = (days_since_start // 14 + 1) * 14
-        candidates.append(WANGSANRO_BIWEEKLY_START + timedelta(days=next_offset))
+        days_since_anchor = (today - WANGSANRO_BIWEEKLY_ANCHOR).days
+        next_offset = (days_since_anchor // 14 + 1) * 14
+        candidates.append(WANGSANRO_BIWEEKLY_ANCHOR + timedelta(days=next_offset))
     return min(candidates)
 
 
