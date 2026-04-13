@@ -22,9 +22,9 @@ push → GitHub Actions 자동 실행
 ## 동선 문자 운영
 
 - GitHub schedule은 월·목 `10:00 KST` 기준으로 잡혀 있지만 실제 실행은 지연될 수 있다.
-- 정확 시각 발송은 로컬 launchd `~/Library/LaunchAgents/com.wjh.carry-route-sms-dispatch.plist`가 `10:00 KST`에 `scripts/dispatch_route_sms.py`를 실행해서 `workflow_dispatch`를 깨우는 구조다.
-- GitHub schedule은 백업 경로로 유지한다.
-- 같은 날 이미 성공 발송 run이 있으면 `scripts/dispatch_route_sms.py --check-only`가 늦게 도는 backup run을 자동으로 건너뛴다.
+- 실제 운영 발송은 GitHub Actions만 사용한다.
+- 같은 날 이미 성공 발송 run이 있으면 `scripts/dispatch_route_sms.py --check-only`가 중복 발송을 자동으로 건너뛴다.
+- `scripts/dispatch_route_sms.py`는 필요할 때 수동으로 GitHub `workflow_dispatch`를 깨우는 보조 도구로만 둔다.
 - 오너 확인 문자는 `OWNER_PHONE` 비밀값 번호로 전체 동선 본문이 발송된다.
 
 ## 테스트

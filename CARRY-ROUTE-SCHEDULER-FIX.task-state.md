@@ -25,19 +25,18 @@
 
 ## Recent Changes
 - `scripts/dispatch_route_sms.py` 추가
-  - 로컬 launchd가 정확 시각에 GitHub `workflow_dispatch`를 깨우는 디스패처
   - 같은 날 성공 run이 이미 있으면 중복 발송을 막는 가드 포함
 - `.github/workflows/send-route-sms.yml` 수정
   - `actions: read` 권한 추가
   - 발송 전 `scripts/dispatch_route_sms.py --check-only` 실행
-  - 같은 날 성공 run이 있으면 늦게 도는 backup schedule run 자동 건너뜀
-- `~/Library/LaunchAgents/com.wjh.carry-route-sms-dispatch.plist` 추가 및 load 완료
-  - 매일 `10:00`에 로컬 디스패처 실행
-  - 실제 발송일이 아닌 경우에는 디스패처가 자체 skip
+  - 같은 날 성공 run이 있으면 늦게 도는 schedule run 자동 건너뜀
 - `CLAUDE.md`에 exact 10:00 디스패처 + backup schedule 구조 반영
 - 오늘분 `workflow_dispatch` 수동 발송 실행
   - run id `24322028775`
   - 기사님 문자 + 오너 동선 문자 발송 성공
+- 사용자 기준 확정 반영
+  - `정시 10:00`보다 `점심 전`이 더 중요하므로 로컬 launchd exact-time 보조장치는 제거
+  - 운영 구조는 다시 `GitHub Actions only`로 정리
 
 ## Verification
 - GitHub run 이력 확인
@@ -48,8 +47,7 @@
   - `ruby -e 'require "yaml"; YAML.load_file(...)'` → workflow YAML 파싱 통과
   - `plutil -lint ~/Library/LaunchAgents/com.wjh.carry-route-sms-dispatch.plist` → OK
 - launchd 등록 검증
-  - `launchctl list` / `launchctl print gui/$(id -u)/com.wjh.carry-route-sms-dispatch`
-  - `Hour=10`, `Minute=0` calendar trigger 확인
+  - 로컬 launchd 보조장치는 사용자 기준상 불필요 판단으로 unload 후 제거
 - 오늘 발송 검증
   - `python3 scripts/dispatch_route_sms.py` → workflow dispatch 생성
   - `gh run watch 24322028775` → success
@@ -59,13 +57,13 @@
   - `python3 scripts/dispatch_route_sms.py --check-only` 재실행 → 동일하게 skip
 
 ## Independent Review
-- Contract met: 예. 오늘 발송 복구, 정확 시각 디스패처, 같은 날 중복 방지, 운영 문서 반영까지 모두 끝냈다.
+- Contract met: 예. 오늘 발송 복구, 같은 날 중복 방지, 클라우드-only 운영 기준 정리, 운영 문서 반영까지 모두 끝냈다.
 - Out-of-scope preserved: 예. 월·목 발송 규칙, 동선 순서, 숙소/정산 로직은 건드리지 않았다.
-- Verification evidence present: 예. 지연 run 기록, launchd trigger, 수동 발송 success run, 중복 skip까지 남겼다.
-- Remaining risk: 로컬 Mac이 꺼져 있거나 로그인 세션이 없으면 exact 10:00 디스패처는 실행되지 않는다. 이 경우 GitHub schedule이 backup으로 남지만 시각은 늦을 수 있다.
+- Verification evidence present: 예. 지연 run 기록, 수동 발송 success run, 중복 skip, launchd 제거까지 남겼다.
+- Remaining risk: GitHub schedule 지연 자체는 플랫폼 특성상 남아 있다. 다만 최근 run은 모두 점심 전에 끝났고, 사용자 기준에도 부합한다.
 
 ## Done Gate
-- Success criteria: 충족. 오늘 문자는 이미 발송됐고, 이후에는 로컬 10:00 디스패처가 먼저 깨우며 늦게 도는 GitHub schedule은 중복 발송을 막는다.
-- Verification evidence: GitHub run `24322028775` success + launchd 등록 + 중복 skip 검증 완료.
-- Remaining risks: 로컬 Mac 전원/로그인 의존성만 남아 있다.
-- Next action: 종료. 내일부터는 launchd exact 10:00 경로가 우선 실행된다.
+- Success criteria: 충족. 오늘 문자는 이미 발송됐고, 이후에는 GitHub Actions만으로 운영하면서 같은 날 중복 발송은 막는다.
+- Verification evidence: GitHub run `24322028775` success + 중복 skip 검증 + launchd 제거 완료.
+- Remaining risks: GitHub schedule이 10시 정각보다 늦을 수는 있다. 다만 최근 기록은 전부 점심 전이었다.
+- Next action: 종료. 이후 운영 경로는 다시 GitHub Actions only다.
