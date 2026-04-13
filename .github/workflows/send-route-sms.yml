@@ -15,6 +15,10 @@ on:
           - "true"
           - "false"
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   send-sms:
     runs-on: ubuntu-latest
@@ -32,7 +36,14 @@ jobs:
       - name: 의존성 설치
         run: pip install -r requirements-route.txt
 
+      - name: 같은 날 중복 발송 확인
+        id: dedupe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/dispatch_route_sms.py --check-only
+
       - name: 동선 문자 발송
+        if: steps.dedupe.outputs.should_send == 'true'
         env:
           SOLAPI_API_KEY: ${{ secrets.SOLAPI_API_KEY }}
           SOLAPI_API_SECRET: ${{ secrets.SOLAPI_API_SECRET }}
@@ -41,3 +52,7 @@ jobs:
           OWNER_PHONE: ${{ secrets.OWNER_PHONE }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: python scripts/send_route_sms.py
+
+      - name: 중복 발송으로 건너뜀
+        if: steps.dedupe.outputs.should_send != 'true'
+        run: echo "이미 오늘 성공 발송이 있어 건너뜁니다. run=${{ steps.dedupe.outputs.existing_run_id }}"
