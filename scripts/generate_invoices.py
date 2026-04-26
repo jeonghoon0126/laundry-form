@@ -124,7 +124,7 @@ SHEETS_FIXED_COSTS = {
     'electricity': 150000,         # J열: 전기세
     'water': 100000,               # K열: 수도세
     'insurance': 60000,            # L열: 보험
-    'supplies': 250000,            # M열: 소모품
+    'supplies_rate': 0.03,         # M열: 소모품
 }
 
 INVOICE_SHEET_MAP = {
@@ -188,6 +188,11 @@ def monthly_extra_total(year: int, month: int) -> int:
     if (year, month) != (2026, 4):
         return 0
     return sum(item['amount'] for items in APRIL_2026_EXTRA_ITEMS.values() for item in items)
+
+
+def calculate_supplies_cost(total_amount: int) -> int:
+    """매출 연동 소모품 비용"""
+    return round(total_amount * SHEETS_FIXED_COSTS['supplies_rate'])
 
 
 def calculate_record_amount(row: tuple) -> int:
@@ -907,6 +912,7 @@ def update_profit_sheet(year: int, month: int, total_amount: int) -> bool:
 
         FC = SHEETS_FIXED_COSTS
         vat = round(total_amount / 11)
+        supplies_cost = calculate_supplies_cost(total_amount)
 
         data = [
             {'range': f'영업이익계산!A{target_row}', 'values': [[month_str]]},
@@ -919,7 +925,7 @@ def update_profit_sheet(year: int, month: int, total_amount: int) -> bool:
             {'range': f'영업이익계산!J{target_row}', 'values': [[FC['electricity']]]},
             {'range': f'영업이익계산!K{target_row}', 'values': [[FC['water']]]},
             {'range': f'영업이익계산!L{target_row}', 'values': [[FC['insurance']]]},
-            {'range': f'영업이익계산!M{target_row}', 'values': [[FC['supplies']]]},
+            {'range': f'영업이익계산!M{target_row}', 'values': [[supplies_cost]]},
             {'range': f'영업이익계산!O{target_row}', 'values': [[vat]]},
         ]
 
