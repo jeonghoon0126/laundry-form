@@ -92,8 +92,10 @@ _BASE = [
 ]
 WANGSANRO_KEY = "왕산로 200, 1004호"
 JANGHANPYEONG_KEY = "장한로26나길 21"
+STAYMOMENT_KEY = "신림동1길 19-5"
 WANGSANRO_ONE_OFF_DATE = date(2026, 4, 9)
 WANGSANRO_BIWEEKLY_ANCHOR = date(2026, 4, 6)
+STAYMOMENT_ROUTE_END_DATE = date(2026, 5, 1)
 
 
 def _insert_after(route: list[str], after_key: str, target_key: str) -> list[str]:
@@ -133,6 +135,9 @@ def get_route(today: date) -> list[str]:
         return []  # 월·목 외 발송 안 함
 
     route = list(_BASE)
+    if today >= STAYMOMENT_ROUTE_END_DATE:
+        route.remove(STAYMOMENT_KEY)
+
     if weekday == 3:  # 목요일 — 장한평 포함 (건대 다음)
         route = _insert_after(route, "능동로 165-1", JANGHANPYEONG_KEY)
 
