@@ -11,7 +11,7 @@ import os
 import sys
 import smtplib
 import calendar
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -84,6 +84,21 @@ BUSINESS_PRICES = {
     },
 }
 
+LOCATION_PRICES = {
+    '중구 장충단로 225': {
+        'body_towel': 1100,  # 메종드브릭 바디타올
+    },
+}
+
+APRIL_2026_EXTRA_ITEMS = {
+    '동대문구 고산자로 508-3': [
+        {'name': '퀵비 차감', 'qty': 1, 'price': -30500, 'amount': -30500},
+    ],
+}
+
+STAYMOMENT_LOCATION = '관악구 신림동1길 19-5'
+STAYMOMENT_SETTLEMENT_END_DATE = date(2026, 5, 1)
+
 ITEM_NAMES = {
     'blanket': '이불',
     'mat': '매트',
@@ -103,13 +118,13 @@ CARRY_JUNGSAN_SPREADSHEET_ID = '1yBDSsG8vgvM-e2oswAqDh2g1K0hzGzANstnesPWPBg4'  #
 
 SHEETS_FIXED_COSTS = {
     'hourly_wage': 12000,          # D열: 시급
-    'logistics_count': 8,          # F열: 물류 횟수
+    'logistics_count': 9,          # F열: 물류 횟수
     'logistics_cost_per': 120000,  # G열: 물류 1회 비용
     'rent_utility': 770000,        # I열: 월세+관리비
     'electricity': 150000,         # J열: 전기세
     'water': 100000,               # K열: 수도세
     'insurance': 60000,            # L열: 보험
-    'supplies': 150000,            # M열: 소모품
+    'supplies': 250000,            # M열: 소모품
 }
 
 INVOICE_SHEET_MAP = {
@@ -131,6 +146,68 @@ def get_prices(reg_no: str) -> dict:
     if reg_no in BUSINESS_PRICES:
         prices.update(BUSINESS_PRICES[reg_no])
     return prices
+
+
+def get_location_prices(location: str) -> dict:
+    """숙소별 예외 단가까지 반영한 단가 반환"""
+    reg_no = BUSINESS_MAP[location][0]
+    prices = get_prices(reg_no)
+    if location in LOCATION_PRICES:
+        prices.update(LOCATION_PRICES[location])
+    return prices
+
+
+def is_settlement_location_active(location: str, record_date: date) -> bool:
+    """정산 대상 숙소 여부"""
+    if location == STAYMOMENT_LOCATION and record_date >= STAYMOMENT_SETTLEMENT_END_DATE:
+        return False
+    return True
+
+
+def apply_monthly_extra_items(business_data: dict, year: int, month: int) -> None:
+    """특정 월에만 반영하는 차감/추가 항목 적용"""
+    if (year, month) != (2026, 4):
+        return
+
+    for location, items in APRIL_2026_EXTRA_ITEMS.items():
+        if location not in BUSINESS_MAP:
+            continue
+        reg_no, biz_name, owner = BUSINESS_MAP[location]
+        if reg_no not in business_data:
+            business_data[reg_no] = {
+                'name': biz_name,
+                'owner': owner,
+                'locations': {},
+                'extra_items': []
+            }
+        business_data[reg_no]['extra_items'].extend(items)
+
+
+def monthly_extra_total(year: int, month: int) -> int:
+    """특정 월 차감/추가 항목 합계"""
+    if (year, month) != (2026, 4):
+        return 0
+    return sum(item['amount'] for items in APRIL_2026_EXTRA_ITEMS.values() for item in items)
+
+
+def calculate_record_amount(row: tuple) -> int:
+    """세탁 기록 1건의 정산 금액 계산"""
+    record_date, location, blanket, mat, pillow_cover, towel, body_towel, pillow_fill, cotton_blanket = row
+    if location not in BUSINESS_MAP:
+        return 0
+    if not is_settlement_location_active(location, record_date):
+        return 0
+
+    prices = get_location_prices(location)
+    return (
+        (blanket or 0) * prices.get('blanket', 0) +
+        (mat or 0) * prices.get('mat', 0) +
+        (pillow_cover or 0) * prices.get('pillow_cover', 0) +
+        (towel or 0) * prices.get('towel', 0) +
+        (body_towel or 0) * prices.get('body_towel', 0) +
+        (pillow_fill or 0) * prices.get('pillow_fill', 0) +
+        (cotton_blanket or 0) * prices.get('cotton_blanket', 0)
+    )
 
 
 # ============================================================
@@ -166,6 +243,8 @@ def aggregate_by_business(rows: list) -> dict:
 
         if location not in BUSINESS_MAP:
             print(f"알 수 없는 숙소: {location}")
+            continue
+        if not is_settlement_location_active(location, record_date):
             continue
 
         reg_no, biz_name, owner = BUSINESS_MAP[location]
@@ -281,7 +360,7 @@ def generate_pdf(reg_no: str, data: dict, year: int, month: int) -> BytesIO:
         item_rows = [['품목', '수량', '단가', '금액']]
         loc_total = 0
 
-        prices = get_prices(reg_no)
+        prices = get_location_prices(location)
         for item_key, item_name in ITEM_NAMES.items():
             qty = loc_data.get(item_key, 0)
             if qty > 0:
@@ -406,8 +485,8 @@ def generate_excel(business_data: dict, year: int, month: int) -> BytesIO:
     for reg_no, data in business_data.items():
         # 총액 계산
         total = 0
-        prices = get_prices(reg_no)
-        for loc_data in data['locations'].values():
+        for location, loc_data in data['locations'].items():
+            prices = get_location_prices(location)
             for item_key in prices:
                 total += (loc_data.get(item_key, 0) or 0) * prices[item_key]
 
@@ -523,14 +602,15 @@ def _get_6month_trend(year: int, month: int) -> list:
     for row_y, row_m, loc, bl, mt, pc, tw, bt, pf, cb in loc_rows:
         if loc not in BUSINESS_MAP:
             continue
-        reg_no = BUSINESS_MAP[loc][0]
-        p = get_prices(reg_no)
+        if not is_settlement_location_active(loc, date(int(row_y), int(row_m), 1)):
+            continue
+        p = get_location_prices(loc)
         amt = bl*p['blanket'] + mt*p['mat'] + pc*p['pillow_cover'] + tw*p['towel'] + bt*p['body_towel'] + pf*p['pillow_fill'] + cb*p.get('cotton_blanket', 0)
         key = (int(row_y), int(row_m))
         if key in monthly:
             monthly[key] += amt
 
-    return [(y, m, monthly[(y, m)]) for y, m in months]
+    return [(y, m, monthly[(y, m)] + monthly_extra_total(y, m)) for y, m in months]
 
 
 def send_report_email(year: int, month: int, rows: list, business_data: dict) -> bool:
@@ -546,6 +626,8 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
     daily = defaultdict(list)
     for row in rows:
         record_date, location, blanket, mat, pillow_cover, towel, body_towel, pillow_fill, cotton_blanket = row
+        if not is_settlement_location_active(location, record_date):
+            continue
         daily[location].append((record_date, blanket or 0, mat or 0,
                                  pillow_cover or 0, towel or 0, body_towel or 0, pillow_fill or 0, cotton_blanket or 0))
     for loc in daily:
@@ -559,15 +641,50 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
     TD_SUB = 'style="padding:5px 10px;text-align:right;font-size:13px;background:#eff6ff;font-weight:bold;"'
     TD_SUB_L = 'style="padding:5px 10px;text-align:left;font-size:13px;background:#eff6ff;font-weight:bold;"'
 
+    # 주별/숙소별 매출 브리핑
+    weekly = defaultdict(lambda: defaultdict(int))
+    weekly_totals = defaultdict(int)
+    for row in rows:
+        record_date, location, *_ = row
+        amount = calculate_record_amount(row)
+        if amount == 0:
+            continue
+        week_start = record_date - timedelta(days=record_date.weekday())
+        week_end = week_start + timedelta(days=6)
+        month_start = date(year, month, 1)
+        month_end = date(year, month, calendar.monthrange(year, month)[1])
+        label_start = max(week_start, month_start)
+        label_end = min(week_end, month_end)
+        week_label = f"{label_start.month}/{label_start.day:02d}~{label_end.month}/{label_end.day:02d}"
+        weekly[week_label][location] += amount
+        weekly_totals[week_label] += amount
+
+    location_names = sorted({loc for values in weekly.values() for loc in values.keys()})
+    week_header = ''.join(f'<th {TH}>{loc}</th>' for loc in location_names)
+    week_rows = []
+    for week_label in sorted(weekly.keys()):
+        cells = ''.join(f'<td {TD}>{weekly[week_label].get(loc, 0):,}원</td>' for loc in location_names)
+        week_rows.append(
+            f'<tr><td {TD_L}>{week_label}</td>{cells}<td {TD_SUB}>{weekly_totals[week_label]:,}원</td></tr>'
+        )
+    weekly_html = f"""
+<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px;margin-bottom:20px;">
+  <h3 style="margin:0 0 12px;font-size:15px;color:#c2410c;">주별 매출 브리핑</h3>
+  <table style="border-collapse:collapse;width:100%;">
+    <thead><tr><th {TH_L}>주차</th>{week_header}<th {TH}>합계</th></tr></thead>
+    <tbody>{''.join(week_rows)}</tbody>
+  </table>
+</div>""" if week_rows else ""
+
     grand_total = 0
     sections = []
 
     for reg_no, data in business_data.items():
-        prices = get_prices(reg_no)
         biz_total = 0
         loc_tables = []
 
         for location in sorted(data['locations'].keys()):
+            prices = get_location_prices(location)
             loc_rows = daily.get(location, [])
             loc_total = 0
             data_rows_html = []
@@ -618,6 +735,24 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
   <tbody>{''.join(data_rows_html)}</tbody>
 </table>""")
 
+        if data.get('extra_items'):
+            extra_rows = []
+            for item in data['extra_items']:
+                biz_total += item['amount']
+                extra_rows.append(
+                    f"<tr><td {TD_L}>{item['name']}</td>"
+                    f"<td {TD}>{item['qty']:,}</td><td {TD}>{item['price']:,}원</td>"
+                    f"<td {TD}>{item['amount']:,}원</td></tr>"
+                )
+            loc_tables.append(f"""
+<p style="margin:16px 0 6px;font-size:14px;font-weight:bold;color:#374151;">▶ 기타 차감/추가</p>
+<table style="border-collapse:collapse;width:100%;margin-bottom:8px;">
+  <thead><tr>
+    <th {TH_L}>항목</th><th {TH}>수량</th><th {TH}>단가</th><th {TH}>금액</th>
+  </tr></thead>
+  <tbody>{''.join(extra_rows)}</tbody>
+</table>""")
+
         grand_total += biz_total
         sections.append(f"""
 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:20px;">
@@ -664,6 +799,7 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
   <h2 style="margin:0 0 4px;font-size:20px;color:#111827;">[캐리] {year}년 {month}월 정산 내부 레포트</h2>
   <p style="margin:0 0 20px;font-size:13px;color:#6b7280;">레코드 {len(rows)}건 · 사업자 {len(business_data)}개</p>
   {trend_html}
+  {weekly_html}
   {''.join(sections)}
   <div style="background:#1e40af;color:#fff;border-radius:8px;padding:14px 20px;text-align:right;font-size:18px;font-weight:bold;">
     {month}월 총 매출: {grand_total:,}원
@@ -804,7 +940,9 @@ def update_invoice_sheets(year: int, month: int, rows: list) -> bool:
 
     location_totals = {}
     for row in rows:
-        _, location, blanket, mat, pillow_cover, towel, _, _ = row
+        record_date, location, blanket, mat, pillow_cover, towel, _, _, _ = row
+        if not is_settlement_location_active(location, record_date):
+            continue
         if location not in location_totals:
             location_totals[location] = {'blanket': 0, 'mat': 0, 'pillow_cover': 0, 'towel': 0}
         location_totals[location]['blanket'] += blanket or 0
@@ -870,6 +1008,7 @@ def main():
 
     # 사업자별 집계
     business_data = aggregate_by_business(rows)
+    apply_monthly_extra_items(business_data, year, month)
     print(f"사업자 수: {len(business_data)}개")
 
     # PDF 생성
@@ -890,8 +1029,8 @@ def main():
     # 합계 계산
     total_amount = 0
     for reg_no, data in business_data.items():
-        prices = get_prices(reg_no)
-        for loc_data in data['locations'].values():
+        for location, loc_data in data['locations'].items():
+            prices = get_location_prices(location)
             for item_key in prices:
                 total_amount += (loc_data.get(item_key, 0) or 0) * prices[item_key]
         for item in data.get('extra_items', []):
