@@ -4,6 +4,7 @@
 - 2026-04-09(목): 청량리 1회 추가
 - 2026-04-06(월) 기준: 2주 간격 월요일 청량리 추가
 - 목요일: 장한평 포함
+- 2026-05-28(목)부터 강남 추가, 부평 출발/복귀 기준 동선 적용
 - Solapi API로 기사님께 LMS 발송
 """
 
@@ -66,6 +67,12 @@ LOCATIONS: dict[str, dict] = {
         "access": "1234* / 건물 왼쪽 LOUNGE 세탁실",
         "parking": None,
     },
+    "봉은사로37길 8": {
+        "region": "강남",
+        "name": "신규 숙소",
+        "access": "상세주소/출입정보 확인 필요",
+        "parking": None,
+    },
     "신림동1길 19-5": {
         "region": "신림",
         "name": "스테이모먼트",
@@ -93,9 +100,11 @@ _BASE = [
 WANGSANRO_KEY = "왕산로 200, 1004호"
 JANGHANPYEONG_KEY = "장한로26나길 21"
 STAYMOMENT_KEY = "신림동1길 19-5"
+GANGNAM_KEY = "봉은사로37길 8"
 WANGSANRO_ONE_OFF_DATE = date(2026, 4, 9)
 WANGSANRO_BIWEEKLY_ANCHOR = date(2026, 4, 6)
 STAYMOMENT_ROUTE_END_DATE = date(2026, 5, 1)
+GANGNAM_ROUTE_START_DATE = date(2026, 5, 28)
 
 
 def _insert_after(route: list[str], after_key: str, target_key: str) -> list[str]:
@@ -124,6 +133,29 @@ def _next_wangsanro_date(today: date) -> date:
     return min(candidates)
 
 
+def _bupyeong_roundtrip_route(today: date) -> list[str]:
+    """부평 출발/복귀 기준으로 2026-05-28 이후 적용하는 방문 순서"""
+    route = [
+        GANGNAM_KEY,
+        "가락로28길 3-10",
+        "능동로 165-1",
+    ]
+
+    if today.weekday() == 3:
+        route.append(JANGHANPYEONG_KEY)
+
+    if _should_include_wangsanro(today):
+        route.append(WANGSANRO_KEY)
+
+    route.extend([
+        "회기로 189",
+        "고산자로 508-3",
+        "장충단로 225",
+        "연희로4길 25-7",
+    ])
+    return route
+
+
 # ──────────────────────────────────────────────
 # 동선 계산
 # ──────────────────────────────────────────────
@@ -133,6 +165,9 @@ def get_route(today: date) -> list[str]:
 
     if weekday not in (0, 3):
         return []  # 월·목 외 발송 안 함
+
+    if today >= GANGNAM_ROUTE_START_DATE:
+        return _bupyeong_roundtrip_route(today)
 
     route = list(_BASE)
     if today >= STAYMOMENT_ROUTE_END_DATE:
