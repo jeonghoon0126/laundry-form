@@ -59,6 +59,7 @@ BUSINESS_MAP = {
     '동대문구 왕산로 200, 1004호': ('767-87-02214', '주식회사 콥스', '남택호'),
     '동대문구 장한로26나길 21': ('767-87-02214', '주식회사 콥스', '남택호'),
     '광진구 능동로 165-1': ('767-87-02214', '주식회사 콥스', '남택호'),
+    '강남구 봉은사로37길 8': ('767-87-02214', '주식회사 콥스', '남택호'),
     '송파구 가락로28길 3-10': ('767-87-02214', '주식회사 콥스', '남택호'),
     '동대문구 회기로 189': ('419-11-02853', '오를리(Orly)', '김지혜'),
     '관악구 신림동1길 19-5': ('461-86-03598', '주식회사스테이모먼트', '유경민'),
@@ -90,14 +91,9 @@ LOCATION_PRICES = {
     },
 }
 
-APRIL_2026_EXTRA_ITEMS = {
-    '동대문구 고산자로 508-3': [
-        {'name': '퀵비 차감', 'qty': 1, 'price': -30500, 'amount': -30500},
-    ],
-}
-
 STAYMOMENT_LOCATION = '관악구 신림동1길 19-5'
 STAYMOMENT_SETTLEMENT_END_DATE = date(2026, 5, 1)
+LAST_DAY_CARRYOVER_START_DATE = date(2026, 4, 30)
 
 ITEM_NAMES = {
     'blanket': '이불',
@@ -115,9 +111,12 @@ ITEM_NAMES = {
 
 CARRY_KOEUN_SPREADSHEET_ID = '1awoBzifmkDdnbQ-t3JAO5t9Ktnd9Qpn-PZgbQj_6apA'  # 캐리_고객
 CARRY_JUNGSAN_SPREADSHEET_ID = '1yBDSsG8vgvM-e2oswAqDh2g1K0hzGzANstnesPWPBg4'  # 캐리_정산
+CARRY_PROFIT_SHEET_ID = 1239394038  # 캐리_고객 > 영업이익계산
+PROFIT_FORMAT_TEMPLATE_ROW = 4
 
 SHEETS_FIXED_COSTS = {
     'hourly_wage': 12000,          # D열: 시급
+    'monthly_labor_cost': 2000000, # E열: 월 고정 인건비
     'logistics_count': 9,          # F열: 물류 횟수
     'logistics_cost_per': 120000,  # G열: 물류 1회 비용
     'rent_utility': 770000,        # I열: 월세+관리비
@@ -125,6 +124,7 @@ SHEETS_FIXED_COSTS = {
     'water': 100000,               # K열: 수도세
     'insurance': 60000,            # L열: 보험
     'supplies_rate': 0.03,         # M열: 소모품
+    'withholding_tax_rate': 0.033, # N열: 원천세
 }
 
 INVOICE_SHEET_MAP = {
@@ -134,6 +134,7 @@ INVOICE_SHEET_MAP = {
     '서대문구 연희로4길 25-7':      'invoice(거래명세서)_서대문구 연희로4길 25-7, 연남에코리빙',
     '동대문구 고산자로 508-3':      'invoice(거래명세서)_동대문구 고산자로 508-3, 스테이브리즈',
     '동대문구 왕산로 200, 1004호':  'invoice(거래명세서)_동대문구 왕산로 200, 청량리역 롯데캐슬 SKY-L65',
+    '강남구 봉은사로37길 8':        'invoice(거래명세서)_강남구 봉은사로37길 8',
     '송파구 가락로28길 3-10':       'invoice(거래명세서)_송파구 가락로28길 3-10 스테이브리즈 송파',
     '광진구 능동로 165-1':          'invoice(거래명세서)_능동로 165-1 화양프라하임',
     '동대문구 장한로26나길 21':     'invoice(거래명세서)_가회',
@@ -164,35 +165,154 @@ def is_settlement_location_active(location: str, record_date: date) -> bool:
     return True
 
 
-def apply_monthly_extra_items(business_data: dict, year: int, month: int) -> None:
-    """특정 월에만 반영하는 차감/추가 항목 적용"""
-    if (year, month) != (2026, 4):
-        return
+def get_settlement_period(year: int, month: int) -> tuple[date, date]:
+    """정산 대상 기간 반환: 시작일 포함, 종료일 제외"""
+    month_start = date(year, month, 1)
+    month_last_day = calendar.monthrange(year, month)[1]
+    month_last_date = date(year, month, month_last_day)
+    prev_month_last_date = month_start - timedelta(days=1)
 
-    for location, items in APRIL_2026_EXTRA_ITEMS.items():
-        if location not in BUSINESS_MAP:
-            continue
-        reg_no, biz_name, owner = BUSINESS_MAP[location]
-        if reg_no not in business_data:
-            business_data[reg_no] = {
-                'name': biz_name,
-                'owner': owner,
-                'locations': {},
-                'extra_items': []
-            }
-        business_data[reg_no]['extra_items'].extend(items)
+    start_date = (
+        prev_month_last_date
+        if prev_month_last_date >= LAST_DAY_CARRYOVER_START_DATE
+        else month_start
+    )
+    end_exclusive = (
+        month_last_date
+        if month_last_date >= LAST_DAY_CARRYOVER_START_DATE
+        else month_last_date + timedelta(days=1)
+    )
+    return start_date, end_exclusive
 
 
-def monthly_extra_total(year: int, month: int) -> int:
-    """특정 월 차감/추가 항목 합계"""
-    if (year, month) != (2026, 4):
-        return 0
-    return sum(item['amount'] for items in APRIL_2026_EXTRA_ITEMS.values() for item in items)
+def get_record_settlement_month(record_date: date) -> tuple[int, int]:
+    """세탁 기록 1건이 속하는 정산 월 반환"""
+    last_day = calendar.monthrange(record_date.year, record_date.month)[1]
+    if record_date >= LAST_DAY_CARRYOVER_START_DATE and record_date.day == last_day:
+        if record_date.month == 12:
+            return record_date.year + 1, 1
+        return record_date.year, record_date.month + 1
+    return record_date.year, record_date.month
+
+
+def format_settlement_period(year: int, month: int) -> str:
+    """정산 기간 표시 문자열"""
+    start_date, end_exclusive = get_settlement_period(year, month)
+    end_date = end_exclusive - timedelta(days=1)
+    return f"{start_date.month}/{start_date.day:02d}~{end_date.month}/{end_date.day:02d}"
 
 
 def calculate_supplies_cost(total_amount: int) -> int:
     """매출 연동 소모품 비용"""
     return round(total_amount * SHEETS_FIXED_COSTS['supplies_rate'])
+
+
+def calculate_profit_summary(total_amount: int) -> dict:
+    """정산 매출 기준 영업이익 요약 계산"""
+    FC = SHEETS_FIXED_COSTS
+    labor_cost = FC['monthly_labor_cost']
+    logistics_cost = FC['logistics_count'] * FC['logistics_cost_per']
+    supplies_cost = calculate_supplies_cost(total_amount)
+    withholding_tax = round((logistics_cost + labor_cost) * FC['withholding_tax_rate'])
+    vat = round(total_amount / 11)
+    total_cost = (
+        labor_cost
+        + logistics_cost
+        + FC['rent_utility']
+        + FC['electricity']
+        + FC['water']
+        + FC['insurance']
+        + supplies_cost
+        + withholding_tax
+        + vat
+    )
+    operating_profit = total_amount - total_cost
+    operating_margin = operating_profit / total_amount if total_amount else 0
+    return {
+        'revenue': total_amount,
+        'labor_cost': labor_cost,
+        'logistics_cost': logistics_cost,
+        'rent_utility': FC['rent_utility'],
+        'electricity': FC['electricity'],
+        'water': FC['water'],
+        'insurance': FC['insurance'],
+        'supplies_cost': supplies_cost,
+        'withholding_tax': withholding_tax,
+        'vat': vat,
+        'total_cost': total_cost,
+        'operating_profit': operating_profit,
+        'operating_margin': operating_margin,
+    }
+
+
+def format_won(amount: int) -> str:
+    """원화 숫자 포맷"""
+    return f"{amount:,}원"
+
+
+def format_profit_summary_text(summary: dict) -> str:
+    """메일 본문용 영업이익 요약 텍스트"""
+    return f"""영업이익 요약
+- 매출: {format_won(summary['revenue'])}
+- 총 지출: {format_won(summary['total_cost'])}
+- 영업이익: {format_won(summary['operating_profit'])}
+- 영업이익률: {summary['operating_margin']:.1%}
+
+지출 내역
+- 인건비: {format_won(summary['labor_cost'])}
+- 물류비: {format_won(summary['logistics_cost'])}
+- 월세+관리비: {format_won(summary['rent_utility'])}
+- 전기세: {format_won(summary['electricity'])}
+- 수도세: {format_won(summary['water'])}
+- 보험: {format_won(summary['insurance'])}
+- 소모품: {format_won(summary['supplies_cost'])}
+- 원천세: {format_won(summary['withholding_tax'])}
+- 부가세: {format_won(summary['vat'])}"""
+
+
+def format_profit_summary_html(summary: dict) -> str:
+    """내부 레포트 이메일용 영업이익 요약 HTML"""
+    rows = [
+        ('인건비', summary['labor_cost']),
+        ('물류비', summary['logistics_cost']),
+        ('월세+관리비', summary['rent_utility']),
+        ('전기세', summary['electricity']),
+        ('수도세', summary['water']),
+        ('보험', summary['insurance']),
+        ('소모품', summary['supplies_cost']),
+        ('원천세', summary['withholding_tax']),
+        ('부가세', summary['vat']),
+    ]
+    cost_rows = ''.join(
+        f'<tr><td style="padding:4px 0;color:#475569;">{label}</td>'
+        f'<td style="padding:4px 0;text-align:right;color:#111827;">{format_won(amount)}</td></tr>'
+        for label, amount in rows
+    )
+    return f"""
+<div style="background:#ecfdf5;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin-bottom:20px;">
+  <h3 style="margin:0 0 12px;font-size:15px;color:#047857;">영업이익 요약</h3>
+  <table style="border-collapse:collapse;width:100%;margin-bottom:12px;">
+    <tr>
+      <td style="padding:6px 0;color:#475569;">매출</td>
+      <td style="padding:6px 0;text-align:right;font-weight:bold;color:#111827;">{format_won(summary['revenue'])}</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0;color:#475569;">총 지출</td>
+      <td style="padding:6px 0;text-align:right;font-weight:bold;color:#111827;">{format_won(summary['total_cost'])}</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0;color:#047857;font-weight:bold;">영업이익</td>
+      <td style="padding:6px 0;text-align:right;font-weight:bold;color:#047857;">{format_won(summary['operating_profit'])}</td>
+    </tr>
+    <tr>
+      <td style="padding:6px 0;color:#047857;font-weight:bold;">영업이익률</td>
+      <td style="padding:6px 0;text-align:right;font-weight:bold;color:#047857;">{summary['operating_margin']:.1%}</td>
+    </tr>
+  </table>
+  <table style="border-collapse:collapse;width:100%;">
+    {cost_rows}
+  </table>
+</div>"""
 
 
 def calculate_record_amount(row: tuple) -> int:
@@ -221,16 +341,17 @@ def calculate_record_amount(row: tuple) -> int:
 
 def get_monthly_data(year: int, month: int) -> list:
     """해당 월의 세탁물 데이터 조회"""
+    start_date, end_exclusive = get_settlement_period(year, month)
     conn = psycopg2.connect(SUPABASE_URI)
     cur = conn.cursor()
 
     cur.execute("""
         SELECT record_date, location, blanket, mat, pillow_cover, towel, body_towel, pillow_fill, cotton_blanket
         FROM laundry_records
-        WHERE EXTRACT(YEAR FROM record_date) = %s
-          AND EXTRACT(MONTH FROM record_date) = %s
+        WHERE record_date >= %s
+          AND record_date < %s
         ORDER BY location, record_date
-    """, (year, month))
+    """, (start_date, end_exclusive))
 
     rows = cur.fetchall()
     cur.close()
@@ -578,9 +699,10 @@ def _get_6month_trend(year: int, month: int) -> list:
         conn = psycopg2.connect(SUPABASE_URI)
         cur = conn.cursor()
         start_y, start_m = months[0]
+        start_date, _ = get_settlement_period(start_y, start_m)
+        _, end_exclusive = get_settlement_period(year, month)
         cur.execute("""
-            SELECT EXTRACT(YEAR FROM record_date)::int  AS y,
-                   EXTRACT(MONTH FROM record_date)::int AS m,
+            SELECT record_date,
                    location,
                    COALESCE(SUM(blanket),0)      AS blanket,
                    COALESCE(SUM(mat),0)          AS mat,
@@ -590,11 +712,11 @@ def _get_6month_trend(year: int, month: int) -> list:
                    COALESCE(SUM(pillow_fill),0)  AS pillow_fill,
                    COALESCE(SUM(cotton_blanket),0) AS cotton_blanket
             FROM laundry_records
-            WHERE record_date >= make_date(%s, %s, 1)
-              AND record_date <  make_date(%s, %s, 1) + INTERVAL '1 month'
-            GROUP BY y, m, location
-            ORDER BY y, m
-        """, (start_y, start_m, year, month))
+            WHERE record_date >= %s
+              AND record_date < %s
+            GROUP BY record_date, location
+            ORDER BY record_date
+        """, (start_date, end_exclusive))
         loc_rows = cur.fetchall()
         cur.close()
         conn.close()
@@ -604,18 +726,18 @@ def _get_6month_trend(year: int, month: int) -> list:
 
     # 월별 합산
     monthly = {(y, m): 0 for y, m in months}
-    for row_y, row_m, loc, bl, mt, pc, tw, bt, pf, cb in loc_rows:
+    for record_date, loc, bl, mt, pc, tw, bt, pf, cb in loc_rows:
         if loc not in BUSINESS_MAP:
             continue
-        if not is_settlement_location_active(loc, date(int(row_y), int(row_m), 1)):
+        if not is_settlement_location_active(loc, record_date):
             continue
         p = get_location_prices(loc)
         amt = bl*p['blanket'] + mt*p['mat'] + pc*p['pillow_cover'] + tw*p['towel'] + bt*p['body_towel'] + pf*p['pillow_fill'] + cb*p.get('cotton_blanket', 0)
-        key = (int(row_y), int(row_m))
+        key = get_record_settlement_month(record_date)
         if key in monthly:
             monthly[key] += amt
 
-    return [(y, m, monthly[(y, m)] + monthly_extra_total(y, m)) for y, m in months]
+    return [(y, m, monthly[(y, m)]) for y, m in months]
 
 
 def send_report_email(year: int, month: int, rows: list, business_data: dict) -> bool:
@@ -649,6 +771,8 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
     # 주별/숙소별 매출 브리핑
     weekly = defaultdict(lambda: defaultdict(int))
     weekly_totals = defaultdict(int)
+    period_start, period_end_exclusive = get_settlement_period(year, month)
+    period_end = period_end_exclusive - timedelta(days=1)
     for row in rows:
         record_date, location, *_ = row
         amount = calculate_record_amount(row)
@@ -656,10 +780,8 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
             continue
         week_start = record_date - timedelta(days=record_date.weekday())
         week_end = week_start + timedelta(days=6)
-        month_start = date(year, month, 1)
-        month_end = date(year, month, calendar.monthrange(year, month)[1])
-        label_start = max(week_start, month_start)
-        label_end = min(week_end, month_end)
+        label_start = max(week_start, period_start)
+        label_end = min(week_end, period_end)
         week_label = f"{label_start.month}/{label_start.day:02d}~{label_end.month}/{label_end.day:02d}"
         weekly[week_label][location] += amount
         weekly_totals[week_label] += amount
@@ -797,13 +919,16 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
     {''.join(trend_rows)}
   </table>
 </div>"""
+    profit_summary = calculate_profit_summary(grand_total)
+    profit_summary_html = format_profit_summary_html(profit_summary)
 
     html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="font-family:'Apple SD Gothic Neo',Arial,sans-serif;max-width:720px;margin:0 auto;padding:20px;color:#111827;">
   <h2 style="margin:0 0 4px;font-size:20px;color:#111827;">[캐리] {year}년 {month}월 정산 내부 레포트</h2>
-  <p style="margin:0 0 20px;font-size:13px;color:#6b7280;">레코드 {len(rows)}건 · 사업자 {len(business_data)}개</p>
+  <p style="margin:0 0 20px;font-size:13px;color:#6b7280;">정산 기간 {format_settlement_period(year, month)} · 레코드 {len(rows)}건 · 사업자 {len(business_data)}개</p>
   {trend_html}
+  {profit_summary_html}
   {weekly_html}
   {''.join(sections)}
   <div style="background:#1e40af;color:#fff;border-radius:8px;padding:14px 20px;text-align:right;font-size:18px;font-weight:bold;">
@@ -890,6 +1015,47 @@ def _sheets_batch_update(spreadsheet_id: str, token: str, data: list):
         return _json.loads(resp.read())
 
 
+def _sheets_batch_request(spreadsheet_id: str, token: str, requests: list):
+    """Sheets API spreadsheets.batchUpdate"""
+    import urllib.request as _req
+    import json as _json
+    url = f'https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}:batchUpdate'
+    body = _json.dumps({'requests': requests}).encode()
+    req = _req.Request(url, data=body, method='POST',
+                       headers={'Authorization': f'Bearer {token}',
+                                'Content-Type': 'application/json'})
+    with _req.urlopen(req) as resp:
+        return _json.loads(resp.read())
+
+
+def format_profit_sheet_row(token: str, target_row: int):
+    """영업이익계산 행 서식을 기존 완성 행 기준으로 복사"""
+    if target_row == PROFIT_FORMAT_TEMPLATE_ROW:
+        return
+
+    source_row_index = PROFIT_FORMAT_TEMPLATE_ROW - 1
+    target_row_index = target_row - 1
+    _sheets_batch_request(CARRY_KOEUN_SPREADSHEET_ID, token, [{
+        'copyPaste': {
+            'source': {
+                'sheetId': CARRY_PROFIT_SHEET_ID,
+                'startRowIndex': source_row_index,
+                'endRowIndex': source_row_index + 1,
+                'startColumnIndex': 0,
+                'endColumnIndex': 18,
+            },
+            'destination': {
+                'sheetId': CARRY_PROFIT_SHEET_ID,
+                'startRowIndex': target_row_index,
+                'endRowIndex': target_row_index + 1,
+                'startColumnIndex': 0,
+                'endColumnIndex': 18,
+            },
+            'pasteType': 'PASTE_FORMAT',
+        }
+    }])
+
+
 def update_profit_sheet(year: int, month: int, total_amount: int) -> bool:
     """캐리_고객 '영업이익계산' 시트 업데이트"""
     token = get_sheets_token()
@@ -911,25 +1077,30 @@ def update_profit_sheet(year: int, month: int, total_amount: int) -> bool:
             target_row = len(rows) + 1
 
         FC = SHEETS_FIXED_COSTS
-        vat = round(total_amount / 11)
-        supplies_cost = calculate_supplies_cost(total_amount)
+        profit_summary = calculate_profit_summary(total_amount)
 
         data = [
             {'range': f'영업이익계산!A{target_row}', 'values': [[month_str]]},
             {'range': f'영업이익계산!B{target_row}', 'values': [[total_amount]]},
             {'range': f'영업이익계산!D{target_row}', 'values': [[FC['hourly_wage']]]},
+            {'range': f'영업이익계산!E{target_row}', 'values': [[profit_summary['labor_cost']]]},
             {'range': f'영업이익계산!F{target_row}', 'values': [[FC['logistics_count']]]},
             {'range': f'영업이익계산!G{target_row}', 'values': [[FC['logistics_cost_per']]]},
-            {'range': f'영업이익계산!H{target_row}', 'values': [[FC['logistics_count'] * FC['logistics_cost_per']]]},
+            {'range': f'영업이익계산!H{target_row}', 'values': [[profit_summary['logistics_cost']]]},
             {'range': f'영업이익계산!I{target_row}', 'values': [[FC['rent_utility']]]},
             {'range': f'영업이익계산!J{target_row}', 'values': [[FC['electricity']]]},
             {'range': f'영업이익계산!K{target_row}', 'values': [[FC['water']]]},
             {'range': f'영업이익계산!L{target_row}', 'values': [[FC['insurance']]]},
-            {'range': f'영업이익계산!M{target_row}', 'values': [[supplies_cost]]},
-            {'range': f'영업이익계산!O{target_row}', 'values': [[vat]]},
+            {'range': f'영업이익계산!M{target_row}', 'values': [[profit_summary['supplies_cost']]]},
+            {'range': f'영업이익계산!N{target_row}', 'values': [[profit_summary['withholding_tax']]]},
+            {'range': f'영업이익계산!O{target_row}', 'values': [[profit_summary['vat']]]},
+            {'range': f'영업이익계산!P{target_row}', 'values': [[profit_summary['total_cost']]]},
+            {'range': f'영업이익계산!Q{target_row}', 'values': [[profit_summary['operating_profit']]]},
+            {'range': f'영업이익계산!R{target_row}', 'values': [[profit_summary['operating_margin']]]},
         ]
 
         _sheets_batch_update(CARRY_KOEUN_SPREADSHEET_ID, token, data)
+        format_profit_sheet_row(token, target_row)
         print(f"영업이익계산 시트 업데이트 완료: {month_str} ({target_row}행), 매출 {total_amount:,}원")
         return True
     except Exception as e:
@@ -1003,6 +1174,7 @@ def main():
         month = int(sys.argv[2])
 
     print(f"=== {year}년 {month}월 세탁물 정산 ===")
+    print(f"정산 기간: {format_settlement_period(year, month)}")
 
     # 데이터 조회
     rows = get_monthly_data(year, month)
@@ -1014,7 +1186,6 @@ def main():
 
     # 사업자별 집계
     business_data = aggregate_by_business(rows)
-    apply_monthly_extra_items(business_data, year, month)
     print(f"사업자 수: {len(business_data)}개")
 
     # PDF 생성
@@ -1043,10 +1214,14 @@ def main():
             total_amount += item['amount']
 
     # 이메일 발송
+    profit_summary = calculate_profit_summary(total_amount)
     subject = f"[캐리] {year}년 {month}월 거래명세서"
     body = f"""{year}년 {month}월 세탁물 정산 내역입니다.
 
+정산 기간: {format_settlement_period(year, month)}
 총 금액: {total_amount:,}원 (사업자 {len(business_data)}개)
+
+{format_profit_summary_text(profit_summary)}
 
 첨부:
 - 거래명세서 PDF {len(business_data)}개
