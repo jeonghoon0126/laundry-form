@@ -93,6 +93,8 @@ LOCATION_PRICES = {
 
 STAYMOMENT_LOCATION = '관악구 신림동1길 19-5'
 STAYMOMENT_SETTLEMENT_END_DATE = date(2026, 5, 1)
+JANGHANPYEONG_LOCATION = '동대문구 장한로26나길 21'
+JANGHANPYEONG_SETTLEMENT_END_DATE = date(2026, 6, 1)
 LAST_DAY_CARRYOVER_START_DATE = date(2026, 4, 30)
 
 ITEM_NAMES = {
@@ -161,6 +163,8 @@ def get_location_prices(location: str) -> dict:
 def is_settlement_location_active(location: str, record_date: date) -> bool:
     """정산 대상 숙소 여부"""
     if location == STAYMOMENT_LOCATION and record_date >= STAYMOMENT_SETTLEMENT_END_DATE:
+        return False
+    if location == JANGHANPYEONG_LOCATION and record_date >= JANGHANPYEONG_SETTLEMENT_END_DATE:
         return False
     return True
 

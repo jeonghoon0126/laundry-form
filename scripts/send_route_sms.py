@@ -5,6 +5,7 @@
 - 2026-04-06(월) 기준: 2주 간격 월요일 청량리 추가
 - 목요일: 장한평 포함
 - 2026-05-28(목)부터 강남 추가, 부평 출발/복귀 기준 동선 적용
+- 2026-06-01(월)부터 장한평 운영 중지로 동선 제외
 - Solapi API로 기사님께 LMS 발송
 """
 
@@ -105,6 +106,7 @@ WANGSANRO_ONE_OFF_DATE = date(2026, 4, 9)
 WANGSANRO_BIWEEKLY_ANCHOR = date(2026, 4, 6)
 STAYMOMENT_ROUTE_END_DATE = date(2026, 5, 1)
 GANGNAM_ROUTE_START_DATE = date(2026, 5, 28)
+JANGHANPYEONG_ROUTE_END_DATE = date(2026, 6, 1)
 
 
 def _insert_after(route: list[str], after_key: str, target_key: str) -> list[str]:
@@ -118,6 +120,10 @@ def _should_include_wangsanro(today: date) -> bool:
     if today.weekday() != 0 or today < WANGSANRO_BIWEEKLY_ANCHOR:
         return False
     return (today - WANGSANRO_BIWEEKLY_ANCHOR).days % 14 == 0
+
+
+def _should_include_janghanpyeong(today: date) -> bool:
+    return today.weekday() == 3 and today < JANGHANPYEONG_ROUTE_END_DATE
 
 
 def _next_wangsanro_date(today: date) -> date:
@@ -141,7 +147,7 @@ def _bupyeong_roundtrip_route(today: date) -> list[str]:
         "능동로 165-1",
     ]
 
-    if today.weekday() == 3:
+    if _should_include_janghanpyeong(today):
         route.append(JANGHANPYEONG_KEY)
 
     if _should_include_wangsanro(today):
@@ -173,7 +179,7 @@ def get_route(today: date) -> list[str]:
     if today >= STAYMOMENT_ROUTE_END_DATE:
         route.remove(STAYMOMENT_KEY)
 
-    if weekday == 3:  # 목요일 — 장한평 포함 (건대 다음)
+    if _should_include_janghanpyeong(today):  # 목요일 — 장한평 포함 (건대 다음)
         route = _insert_after(route, "능동로 165-1", JANGHANPYEONG_KEY)
 
     if _should_include_wangsanro(today):  # 청량리 포함 (회기 다음, 건대 전)
@@ -196,8 +202,8 @@ def get_next_notes(today: date, route: list[str]) -> list[str]:
         next_weekday = WEEKDAY_KO[next_wangsanro.weekday()]
         notes.append(f"청량리는 다음 일정 {next_wangsanro.month}/{next_wangsanro.day}({next_weekday})")
 
-    if JANGHANPYEONG_KEY not in route:
-        next_thu = _next_thursday(today)
+    next_thu = _next_thursday(today)
+    if JANGHANPYEONG_KEY not in route and next_thu < JANGHANPYEONG_ROUTE_END_DATE:
         notes.append(f"장한평은 목요일({next_thu.month}/{next_thu.day})")
 
     return notes
