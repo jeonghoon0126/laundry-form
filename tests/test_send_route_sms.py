@@ -44,6 +44,24 @@ class SendRouteSmsTests(unittest.TestCase):
             "연희로4길 25-7",
         ])
 
+    def test_janghanpyeong_route_ends_from_2026_06_01(self):
+        route = self.sms.get_route(date(2026, 6, 4))
+
+        self.assertEqual(route, [
+            "봉은사로37길 8",
+            "가락로28길 3-10",
+            "능동로 165-1",
+            "회기로 189",
+            "고산자로 508-3",
+            "장충단로 225",
+            "연희로4길 25-7",
+        ])
+
+    def test_janghanpyeong_next_note_stops_after_end_date(self):
+        _, body = self.sms.build_message(date(2026, 6, 1), self.sms.get_route(date(2026, 6, 1)))
+
+        self.assertNotIn("장한평", body)
+
     def test_route_before_gangnam_start_date_keeps_existing_order(self):
         route = self.sms.get_route(date(2026, 5, 25))
 

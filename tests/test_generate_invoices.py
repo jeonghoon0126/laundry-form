@@ -83,6 +83,12 @@ class ProfitSummaryTests(unittest.TestCase):
         self.assertEqual(owner, "남택호")
         self.assertEqual(self.gi.get_location_prices("강남구 봉은사로37길 8"), self.gi.PRICES)
 
+    def test_janghanpyeong_settlement_ends_from_2026_06_01(self):
+        location = "동대문구 장한로26나길 21"
+
+        self.assertTrue(self.gi.is_settlement_location_active(location, self.gi.date(2026, 5, 31)))
+        self.assertFalse(self.gi.is_settlement_location_active(location, self.gi.date(2026, 6, 1)))
+
 
 if __name__ == "__main__":
     unittest.main()

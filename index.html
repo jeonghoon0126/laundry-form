@@ -1004,6 +1004,8 @@
       '송파구 가락로28길 3-10',
       '관악구 신림동1길 19-5'
     ];
+    const JANGHANPYEONG_LOCATION = '동대문구 장한로26나길 21';
+    const JANGHANPYEONG_END_DATE = '2026-06-01';
 
     const items = [
       { id: 'blanket', name: '이불', icon: 'bed' },
@@ -1018,17 +1020,46 @@
     let editingId = null;
     let deletingId = null;
 
+    function toDateInputValue(date) {
+      const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+      return localDate.toISOString().split('T')[0];
+    }
+
     function init() {
-      const today = new Date().toISOString().split('T')[0];
+      const today = toDateInputValue(new Date());
       document.getElementById('dateInput').value = today;
 
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
-      document.getElementById('startDate').value = weekAgo.toISOString().split('T')[0];
+      document.getElementById('startDate').value = toDateInputValue(weekAgo);
       document.getElementById('endDate').value = today;
 
+      renderLocationInputs();
+
+      const editLocationSelect = document.getElementById('editLocation');
+      locations.forEach(loc => {
+        const option = document.createElement('option');
+        option.value = loc;
+        option.textContent = loc;
+        editLocationSelect.appendChild(option);
+      });
+
+      document.getElementById('dateInput').addEventListener('change', renderLocationInputs);
+      document.getElementById('startDate').addEventListener('change', loadRecords);
+      document.getElementById('endDate').addEventListener('change', loadRecords);
+    }
+
+    function getInputLocations(date) {
+      return locations.filter(loc => !(loc === JANGHANPYEONG_LOCATION && date >= JANGHANPYEONG_END_DATE));
+    }
+
+    function renderLocationInputs() {
+      const date = document.getElementById('dateInput').value;
+      const inputLocations = getInputLocations(date);
       const container = document.getElementById('locations');
-      locations.forEach((loc, idx) => {
+      container.innerHTML = '';
+
+      inputLocations.forEach((loc, idx) => {
         const card = document.createElement('div');
         card.className = 'location-card';
         card.innerHTML = `
@@ -1062,17 +1093,6 @@
         `;
         container.appendChild(card);
       });
-
-      const editLocationSelect = document.getElementById('editLocation');
-      locations.forEach(loc => {
-        const option = document.createElement('option');
-        option.value = loc;
-        option.textContent = loc;
-        editLocationSelect.appendChild(option);
-      });
-
-      document.getElementById('startDate').addEventListener('change', loadRecords);
-      document.getElementById('endDate').addEventListener('change', loadRecords);
     }
 
     function showPage(page) {
@@ -1118,8 +1138,9 @@
         return;
       }
 
+      const inputLocations = getInputLocations(date);
       const records = [];
-      locations.forEach((loc, idx) => {
+      inputLocations.forEach((loc, idx) => {
         const blanket = parseInt(document.getElementById(`${idx}_blanket`).value) || 0;
         const mat = parseInt(document.getElementById(`${idx}_mat`).value) || 0;
         const pillow_cover = parseInt(document.getElementById(`${idx}_pillow_cover`).value) || 0;
@@ -1153,7 +1174,7 @@
 
         if (response.ok) {
           showToast('저장되었습니다', 'success');
-          locations.forEach((_, idx) => {
+          inputLocations.forEach((_, idx) => {
             items.forEach(item => {
               document.getElementById(`${idx}_${item.id}`).value = 0;
             });
