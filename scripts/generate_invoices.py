@@ -118,15 +118,17 @@ PROFIT_FORMAT_TEMPLATE_ROW = 4
 
 SHEETS_FIXED_COSTS = {
     'hourly_wage': 12000,          # D열: 시급
-    'monthly_labor_cost': 2000000, # E열: 월 고정 인건비
+    'labor_hours_baseline': 190,   # 인건비 산정 기준 시간
+    'labor_revenue_baseline': 7457500, # 인건비 비율 기준 매출
     'logistics_count': 9,          # F열: 물류 횟수
     'logistics_cost_per': 120000,  # G열: 물류 1회 비용
     'rent_utility': 770000,        # I열: 월세+관리비
-    'electricity': 150000,         # J열: 전기세
+    'electricity': 250000,         # J열: 전기세
     'water': 100000,               # K열: 수도세
     'insurance': 60000,            # L열: 보험
-    'supplies_rate': 0.03,         # M열: 소모품
+    'supplies_rate': 0.04,         # M열: 소모품
     'withholding_tax_rate': 0.033, # N열: 원천세
+    'vat_rate_on_net': 0.10,       # 부가세: 부가세 제외 전 이익의 10%
 }
 
 INVOICE_SHEET_MAP = {
@@ -211,15 +213,21 @@ def calculate_supplies_cost(total_amount: int) -> int:
     return round(total_amount * SHEETS_FIXED_COSTS['supplies_rate'])
 
 
+def calculate_labor_cost(total_amount: int) -> int:
+    """기준 월 인건비를 매출 비율로 환산"""
+    FC = SHEETS_FIXED_COSTS
+    baseline_labor_cost = FC['hourly_wage'] * FC['labor_hours_baseline']
+    return round(total_amount * baseline_labor_cost / FC['labor_revenue_baseline'])
+
+
 def calculate_profit_summary(total_amount: int) -> dict:
     """정산 매출 기준 영업이익 요약 계산"""
     FC = SHEETS_FIXED_COSTS
-    labor_cost = FC['monthly_labor_cost']
+    labor_cost = calculate_labor_cost(total_amount)
     logistics_cost = FC['logistics_count'] * FC['logistics_cost_per']
     supplies_cost = calculate_supplies_cost(total_amount)
     withholding_tax = round((logistics_cost + labor_cost) * FC['withholding_tax_rate'])
-    vat = round(total_amount / 11)
-    total_cost = (
+    pre_vat_cost = (
         labor_cost
         + logistics_cost
         + FC['rent_utility']
@@ -228,8 +236,10 @@ def calculate_profit_summary(total_amount: int) -> dict:
         + FC['insurance']
         + supplies_cost
         + withholding_tax
-        + vat
     )
+    vat_base = max(0, total_amount - pre_vat_cost)
+    vat = round(vat_base * FC['vat_rate_on_net'])
+    total_cost = pre_vat_cost + vat
     operating_profit = total_amount - total_cost
     operating_margin = operating_profit / total_amount if total_amount else 0
     return {

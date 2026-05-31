@@ -15,32 +15,44 @@ class ProfitSummaryTests(unittest.TestCase):
     def setUp(self):
         self.gi = load_generate_invoices()
 
-    def test_profit_summary_uses_fixed_monthly_labor_and_taxes(self):
+    def test_profit_summary_uses_revenue_based_labor_and_net_vat(self):
         summary = self.gi.calculate_profit_summary(6_948_700)
 
         self.assertEqual(summary["revenue"], 6_948_700)
-        self.assertEqual(summary["labor_cost"], 2_000_000)
+        self.assertEqual(summary["labor_cost"], 2_124_443)
         self.assertEqual(summary["logistics_cost"], 1_080_000)
         self.assertEqual(summary["rent_utility"], 770_000)
-        self.assertEqual(summary["electricity"], 150_000)
+        self.assertEqual(summary["electricity"], 250_000)
         self.assertEqual(summary["water"], 100_000)
         self.assertEqual(summary["insurance"], 60_000)
-        self.assertEqual(summary["supplies_cost"], 208_461)
-        self.assertEqual(summary["withholding_tax"], 101_640)
-        self.assertEqual(summary["vat"], 631_700)
-        self.assertEqual(summary["total_cost"], 5_101_801)
-        self.assertEqual(summary["operating_profit"], 1_846_899)
-        self.assertAlmostEqual(summary["operating_margin"], 0.2658, places=4)
+        self.assertEqual(summary["supplies_cost"], 277_948)
+        self.assertEqual(summary["withholding_tax"], 105_747)
+        self.assertEqual(summary["vat"], 218_056)
+        self.assertEqual(summary["total_cost"], 4_986_194)
+        self.assertEqual(summary["operating_profit"], 1_962_506)
+        self.assertAlmostEqual(summary["operating_margin"], 0.2824, places=4)
 
     def test_profit_summary_text_is_ready_for_email(self):
         summary = self.gi.calculate_profit_summary(6_948_700)
         text = self.gi.format_profit_summary_text(summary)
 
         self.assertIn("매출: 6,948,700원", text)
-        self.assertIn("총 지출: 5,101,801원", text)
-        self.assertIn("영업이익: 1,846,899원", text)
-        self.assertIn("영업이익률: 26.6%", text)
-        self.assertIn("인건비: 2,000,000원", text)
+        self.assertIn("총 지출: 4,986,194원", text)
+        self.assertIn("영업이익: 1,962,506원", text)
+        self.assertIn("영업이익률: 28.2%", text)
+        self.assertIn("인건비: 2,124,443원", text)
+
+    def test_profit_summary_for_may_baseline_revenue(self):
+        summary = self.gi.calculate_profit_summary(7_457_500)
+
+        self.assertEqual(summary["labor_cost"], 2_280_000)
+        self.assertEqual(summary["electricity"], 250_000)
+        self.assertEqual(summary["supplies_cost"], 298_300)
+        self.assertEqual(summary["withholding_tax"], 110_880)
+        self.assertEqual(summary["vat"], 250_832)
+        self.assertEqual(summary["total_cost"], 5_200_012)
+        self.assertEqual(summary["operating_profit"], 2_257_488)
+        self.assertAlmostEqual(summary["operating_margin"], 0.3027, places=4)
 
     def test_profit_sheet_update_writes_final_profit_columns(self):
         captured = {}
@@ -68,11 +80,11 @@ class ProfitSummaryTests(unittest.TestCase):
             item["range"]: item["values"][0][0]
             for item in captured["data"]
         }
-        self.assertEqual(values_by_range["영업이익계산!E7"], 2_000_000)
-        self.assertEqual(values_by_range["영업이익계산!N7"], 101_640)
-        self.assertEqual(values_by_range["영업이익계산!P7"], 5_101_801)
-        self.assertEqual(values_by_range["영업이익계산!Q7"], 1_846_899)
-        self.assertAlmostEqual(values_by_range["영업이익계산!R7"], 0.2658, places=4)
+        self.assertEqual(values_by_range["영업이익계산!E7"], 2_124_443)
+        self.assertEqual(values_by_range["영업이익계산!N7"], 105_747)
+        self.assertEqual(values_by_range["영업이익계산!P7"], 4_986_194)
+        self.assertEqual(values_by_range["영업이익계산!Q7"], 1_962_506)
+        self.assertAlmostEqual(values_by_range["영업이익계산!R7"], 0.2824, places=4)
         self.assertEqual(captured["formatted_row"], 7)
 
     def test_gangnam_location_uses_kops_business_and_default_prices(self):
