@@ -1,0 +1,47 @@
+name: Weekly Revenue Report
+
+on:
+  schedule:
+    # 매주 월요일 오전 9시 KST = 일요일 00:00 UTC
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: "Report start date (YYYY-MM-DD, inclusive)"
+        required: false
+      end_date:
+        description: "Report end date (YYYY-MM-DD, exclusive)"
+        required: false
+      dry_run:
+        description: "DRY_RUN (실제 이메일 발송 없이 조회만)"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install psycopg2-binary reportlab openpyxl "google-auth>=2.0,<2.49" requests
+
+      - name: Send weekly revenue report
+        env:
+          SUPABASE_URI: ${{ secrets.SUPABASE_URI }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          WEEKLY_REPORT_TO: kham0126@gmail.com
+          REPORT_START_DATE: ${{ inputs.start_date }}
+          REPORT_END_DATE: ${{ inputs.end_date }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: python scripts/send_weekly_revenue_report.py

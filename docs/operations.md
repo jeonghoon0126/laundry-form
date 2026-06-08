@@ -12,6 +12,7 @@
 ## 주요 스크립트
 
 - `scripts/generate_invoices.py`: 월말 정산 자동 실행
+- `scripts/send_weekly_revenue_report.py`: 지난 월~일 주별 매출 보고 이메일 발송
 - `scripts/send_route_sms.py`: 캐리 동선 문자 본문 생성과 발송
 - `scripts/dispatch_route_sms.py`: exact 10:00 디스패처와 같은 날 중복 발송 가드
 
@@ -27,6 +28,7 @@
 
 - push 후 GitHub Actions가 자동 실행된다.
 - 대상 워크플로우는 `.github/workflows/send-route-sms.yml`이다.
+- 주별 매출 보고 워크플로우는 `.github/workflows/weekly-revenue-report.yml`이며 매주 월요일 09:00 KST에 지난 월~일 매출을 `kham0126@gmail.com`으로 보낸다.
 - GitHub schedule은 월요일과 목요일 10:00 KST 기준이지만 실제 실행은 지연될 수 있다.
 - 실제 운영 발송은 GitHub Actions만 사용한다.
 - 같은 날 이미 성공 발송 run이 있으면 `scripts/dispatch_route_sms.py --check-only`가 중복 발송을 건너뛴다.
