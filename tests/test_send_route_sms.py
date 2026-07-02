@@ -74,13 +74,34 @@ class SendRouteSmsTests(unittest.TestCase):
             "가락로28길 3-10",
         ])
 
-    def test_gangnam_message_marks_missing_detail(self):
+    def test_gangnam_message_includes_eonju_access_detail(self):
         subject, body = self.sms.build_message(date(2026, 5, 28), self.sms.get_route(date(2026, 5, 28)))
 
         self.assertEqual(subject, "5/28(목) 동선")
-        self.assertIn("① 강남 | 신규 숙소", body)
-        self.assertIn("봉은사로37길 8", body)
-        self.assertIn("상세주소/출입정보 확인 필요", body)
+        self.assertIn("① 강남 | 강남 언주로 숙소", body)
+        self.assertIn("서울 강남구 봉은사로37길 8", body)
+        self.assertIn("건물 앞 정차 권장", body)
+        self.assertIn("건물출입 종버튼 +2580", body)
+        self.assertIn("엘리베이터 이동", body)
+        self.assertIn("5층 엘리베이터 옆 수납창고", body)
+        self.assertIn("자물쇠 000*", body)
+        self.assertNotIn("상세주소/출입정보 확인 필요", body)
+
+    def test_wangsanro_is_added_on_july_monday_and_thursday_only(self):
+        july_thursday = self.sms.get_route(date(2026, 7, 2))
+        july_monday = self.sms.get_route(date(2026, 7, 6))
+        august_monday = self.sms.get_route(date(2026, 8, 3))
+
+        self.assertIn("왕산로 200, 1004호", july_thursday)
+        self.assertIn("왕산로 200, 1004호", july_monday)
+        self.assertNotIn("왕산로 200, 1004호", august_monday)
+
+    def test_wangsanro_july_override_keeps_last_thursday_and_august_note(self):
+        july_last_thursday = self.sms.get_route(date(2026, 7, 30))
+        _, august_body = self.sms.build_message(date(2026, 8, 3), self.sms.get_route(date(2026, 8, 3)))
+
+        self.assertIn("왕산로 200, 1004호", july_last_thursday)
+        self.assertIn("청량리는 다음 일정 8/10(월)", august_body)
 
 
 if __name__ == "__main__":

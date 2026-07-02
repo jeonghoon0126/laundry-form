@@ -14,6 +14,14 @@ on:
         options:
           - "true"
           - "false"
+      force_resend:
+        description: "오늘 같은 날 중복 발송 확인 건너뛰기"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 permissions:
   contents: read
@@ -40,6 +48,7 @@ jobs:
         id: dedupe
         env:
           GH_TOKEN: ${{ github.token }}
+          FORCE_RESEND: ${{ github.event.inputs.force_resend || 'false' }}
         run: python scripts/dispatch_route_sms.py --check-only
 
       - name: 동선 문자 발송

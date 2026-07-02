@@ -3,6 +3,7 @@
 - 고정 스케줄 기반 (월요일/목요일)
 - 2026-04-09(목): 청량리 1회 추가
 - 2026-04-06(월) 기준: 2주 간격 월요일 청량리 추가
+- 2026-07-01~2026-07-31: 청량리 월·목 추가
 - 목요일: 장한평 포함
 - 2026-05-28(목)부터 강남 추가, 부평 출발/복귀 기준 동선 적용
 - 2026-06-01(월)부터 장한평 운영 중지로 동선 제외
@@ -70,9 +71,10 @@ LOCATIONS: dict[str, dict] = {
     },
     "봉은사로37길 8": {
         "region": "강남",
-        "name": "신규 숙소",
-        "access": "상세주소/출입정보 확인 필요",
-        "parking": None,
+        "name": "강남 언주로 숙소",
+        "address": "서울 강남구 봉은사로37길 8",
+        "access": "건물출입 종버튼 +2580 / 엘리베이터 이동 / 5층 엘리베이터 옆 수납창고 자물쇠 000*",
+        "parking": "주차장 협소, 건물 앞 정차 권장",
     },
     "신림동1길 19-5": {
         "region": "신림",
@@ -104,6 +106,8 @@ STAYMOMENT_KEY = "신림동1길 19-5"
 GANGNAM_KEY = "봉은사로37길 8"
 WANGSANRO_ONE_OFF_DATE = date(2026, 4, 9)
 WANGSANRO_BIWEEKLY_ANCHOR = date(2026, 4, 6)
+WANGSANRO_JULY_ROUTE_START = date(2026, 7, 1)
+WANGSANRO_JULY_ROUTE_END = date(2026, 7, 31)
 STAYMOMENT_ROUTE_END_DATE = date(2026, 5, 1)
 GANGNAM_ROUTE_START_DATE = date(2026, 5, 28)
 JANGHANPYEONG_ROUTE_END_DATE = date(2026, 6, 1)
@@ -115,11 +119,20 @@ def _insert_after(route: list[str], after_key: str, target_key: str) -> list[str
 
 
 def _should_include_wangsanro(today: date) -> bool:
+    if _is_july_wangsanro_route_day(today):
+        return True
     if today == WANGSANRO_ONE_OFF_DATE:
         return True
     if today.weekday() != 0 or today < WANGSANRO_BIWEEKLY_ANCHOR:
         return False
     return (today - WANGSANRO_BIWEEKLY_ANCHOR).days % 14 == 0
+
+
+def _is_july_wangsanro_route_day(today: date) -> bool:
+    return (
+        WANGSANRO_JULY_ROUTE_START <= today <= WANGSANRO_JULY_ROUTE_END
+        and today.weekday() in (0, 3)
+    )
 
 
 def _should_include_janghanpyeong(today: date) -> bool:
@@ -227,7 +240,7 @@ def build_message(today: date, route: list[str]) -> tuple[str, str]:
         num = CIRCLED_NUMS[i]
         lines.append(f"{num} {info['region']} | {info['name']}")
         lines.append("")
-        lines.append(loc_key)
+        lines.append(info.get("address", loc_key))
         lines.append(info["access"])
         if info.get("parking"):
             lines.append(info["parking"])
