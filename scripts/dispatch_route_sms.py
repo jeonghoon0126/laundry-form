@@ -4,7 +4,6 @@ Route SMS workflow helper.
 
 - Local launchd: dispatch the GitHub workflow at the exact local time.
 - GitHub Actions: skip duplicate same-day sends when a successful run already exists.
-- Manual workflow_dispatch can set FORCE_RESEND=true for an explicitly approved resend.
 """
 
 from __future__ import annotations
@@ -105,13 +104,6 @@ def check_only(limit: int) -> int:
     env = os.environ.copy()
     current_run_id = int(env.get("GITHUB_RUN_ID", "0"))
     current_day = today_kst()
-
-    if env.get("FORCE_RESEND", "false").lower() == "true":
-        write_github_output("should_send", "true")
-        write_github_output("existing_run_id", "")
-        print(f"[OK] force resend requested for {current_day}")
-        return 0
-
     existing = find_successful_run_today(
         current_day=current_day,
         exclude_run_id=current_run_id or None,
