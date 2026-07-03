@@ -160,7 +160,12 @@ INVOICE_SHEET_MAP = {
     '동대문구 장한로26나길 21':     'invoice(거래명세서)_가회',
 }
 
-INVOICE_JOB_MODES = {'full', 'invoice_sheets_only', 'list_invoice_sheets'}
+INVOICE_JOB_MODES = {
+    'full',
+    'invoice_sheets_only',
+    'list_invoice_sheets',
+    'inspect_invoice_sheets',
+}
 
 INVOICE_SHEET_ALIASES = {
     '중구 장충단로 225': ['장충동 메종드브릭', '메종드브릭', '장충단로 225'],
@@ -1512,6 +1517,47 @@ def list_invoice_sheets() -> bool:
         return False
 
 
+def inspect_invoice_sheets() -> bool:
+    """선택한 invoice 탭의 제한된 셀 값 출력"""
+    token = get_sheets_token()
+    if not token:
+        print("Sheets 토큰 없음. invoice 시트 점검 건너뜀.")
+        return False
+
+    sheet_filter = os.environ.get('INVOICE_SHEET_FILTER', '').strip()
+    if not sheet_filter:
+        print("INVOICE_SHEET_FILTER가 필요합니다.")
+        return False
+
+    try:
+        sheet_titles = get_sheet_titles(CARRY_JUNGSAN_SPREADSHEET_ID, token)
+        filter_key = normalize_sheet_key(sheet_filter)
+        target_titles = [
+            title for title in sheet_titles
+            if title.startswith('invoice(거래명세서)_')
+            and filter_key in normalize_sheet_key(title)
+        ]
+        if not target_titles:
+            print(f"조건에 맞는 invoice 시트 없음: {sheet_filter}")
+            return False
+
+        for title in target_titles:
+            print(f"invoice 시트 점검: {title}")
+            values = _sheets_get(CARRY_JUNGSAN_SPREADSHEET_ID, token, f"'{title}'!A1:F25")
+            for index, row in enumerate(values, 1):
+                non_empty_values = [
+                    str(value).strip()
+                    for value in row
+                    if str(value).strip()
+                ]
+                if non_empty_values:
+                    print(f"  R{index}: {' | '.join(non_empty_values)}")
+        return True
+    except Exception as e:
+        print(f"invoice 시트 점검 실패: {e}")
+        return False
+
+
 def format_profit_sheet_row(token: str, target_row: int):
     """영업이익계산 행 서식을 기존 완성 행 기준으로 복사"""
     if target_row == PROFIT_FORMAT_TEMPLATE_ROW:
@@ -1684,6 +1730,11 @@ def main():
 
     if job_mode == 'list_invoice_sheets':
         if not list_invoice_sheets():
+            sys.exit(1)
+        return
+
+    if job_mode == 'inspect_invoice_sheets':
+        if not inspect_invoice_sheets():
             sys.exit(1)
         return
 

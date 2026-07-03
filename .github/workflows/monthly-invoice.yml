@@ -22,6 +22,10 @@ on:
           - full
           - invoice_sheets_only
           - list_invoice_sheets
+          - inspect_invoice_sheets
+      sheet_filter:
+        description: 'Invoice sheet filter for inspect mode'
+        required: false
 
 jobs:
   generate:
@@ -69,6 +73,7 @@ jobs:
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           SHEETS_SERVICE_ACCOUNT: ${{ secrets.SHEETS_SERVICE_ACCOUNT }}
           INVOICE_JOB_MODE: ${{ inputs.mode || 'full' }}
+          INVOICE_SHEET_FILTER: ${{ inputs.sheet_filter || '' }}
         run: |
           if [ -n "${{ inputs.year }}" ] && [ -n "${{ inputs.month }}" ]; then
             python scripts/generate_invoices.py ${{ inputs.year }} ${{ inputs.month }}
