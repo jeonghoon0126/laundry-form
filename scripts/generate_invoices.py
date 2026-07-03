@@ -172,6 +172,31 @@ INVOICE_SHEET_ALIASES = {
     '강남구 봉은사로37길 8': ['강남구 봉은사로37길 8', '봉은사로37길 8', '봉은사로 37길 8'],
 }
 
+INVOICE_SHEET_DISPLAY_NAMES = {
+    '중구 장충단로 225': '장충동 메종드브릭',
+    '강남구 봉은사로37길 8': '강남구 봉은사로37길 8',
+}
+
+INVOICE_SHEET_TEMPLATE_MAP = {
+    '중구 장충단로 225': 'invoice(거래명세서)_휴소',
+    '강남구 봉은사로37길 8': 'invoice(거래명세서)_송파구 가락로28길 3-10 스테이브리즈 송파',
+}
+
+DEFAULT_INVOICE_ITEM_ROWS = {
+    'blanket': 12,
+    'mat': 13,
+    'pillow_cover': 14,
+    'towel': 15,
+}
+
+INVOICE_SHEET_ITEM_ROWS = {
+    '중구 장충단로 225': {
+        **DEFAULT_INVOICE_ITEM_ROWS,
+        'body_towel': 16,
+        'cotton_blanket': 17,
+    },
+}
+
 
 def get_prices(reg_no: str) -> dict:
     """사업자번호에 맞는 단가 반환 (override 적용)"""
@@ -1449,9 +1474,20 @@ def _sheets_get_metadata(spreadsheet_id: str, token: str) -> dict:
 
 def get_sheet_titles(spreadsheet_id: str, token: str) -> list:
     """스프레드시트의 탭 제목 목록 반환"""
+    return [
+        sheet['title']
+        for sheet in get_sheet_properties(spreadsheet_id, token)
+    ]
+
+
+def get_sheet_properties(spreadsheet_id: str, token: str) -> list:
+    """스프레드시트의 탭 속성 목록 반환"""
     metadata = _sheets_get_metadata(spreadsheet_id, token)
     return [
-        sheet.get('properties', {}).get('title', '')
+        {
+            'sheetId': sheet.get('properties', {}).get('sheetId'),
+            'title': sheet.get('properties', {}).get('title', ''),
+        }
         for sheet in metadata.get('sheets', [])
         if sheet.get('properties', {}).get('title')
     ]
@@ -1493,6 +1529,115 @@ def resolve_invoice_sheet_name(location: str, sheet_titles: list) -> str:
             return matches[0]
 
     return expected
+
+
+def find_existing_sheet_title(sheet_titles: list, expected_title: str) -> str:
+    """탭 제목 목록에서 실제 제목 반환"""
+    if expected_title in sheet_titles:
+        return expected_title
+
+    expected_key = normalize_sheet_key(expected_title)
+    for title in sheet_titles:
+        if normalize_sheet_key(title) == expected_key:
+            return title
+    return ''
+
+
+def duplicate_invoice_sheet(
+    token: str,
+    source_sheet_name: str,
+    new_sheet_name: str,
+    sheet_properties: list,
+) -> None:
+    """기존 invoice 탭을 복제해 새 invoice 탭 생성"""
+    title_to_id = {
+        sheet['title']: sheet['sheetId']
+        for sheet in sheet_properties
+        if sheet.get('title') and sheet.get('sheetId') is not None
+    }
+    source_sheet_id = title_to_id.get(source_sheet_name)
+    if source_sheet_id is None:
+        raise ValueError(f"템플릿 invoice 시트 없음: {source_sheet_name}")
+
+    _sheets_batch_request(CARRY_JUNGSAN_SPREADSHEET_ID, token, [{
+        'duplicateSheet': {
+            'sourceSheetId': source_sheet_id,
+            'newSheetName': new_sheet_name,
+        }
+    }])
+    sheet_properties.append({'title': new_sheet_name, 'sheetId': None})
+    print(f"  invoice 시트 생성 완료: {new_sheet_name} (template: {source_sheet_name})")
+
+
+def ensure_invoice_sheet_name(location: str, token: str, sheet_properties: list) -> tuple[str, bool]:
+    """invoice 탭이 없으면 지정 템플릿에서 복제하고 실제 탭명 반환"""
+    sheet_titles = [sheet['title'] for sheet in sheet_properties]
+    resolved_sheet_name = resolve_invoice_sheet_name(location, sheet_titles)
+    existing_sheet_name = find_existing_sheet_title(sheet_titles, resolved_sheet_name)
+    if existing_sheet_name:
+        return existing_sheet_name, False
+
+    expected_sheet_name = INVOICE_SHEET_MAP.get(location, '')
+    template_sheet_name = INVOICE_SHEET_TEMPLATE_MAP.get(location, '')
+    if not expected_sheet_name or not template_sheet_name:
+        return resolved_sheet_name, False
+
+    template_title = find_existing_sheet_title(sheet_titles, template_sheet_name)
+    if not template_title:
+        raise ValueError(f"invoice 템플릿 매핑 실패: {location} → {template_sheet_name}")
+
+    duplicate_invoice_sheet(token, template_title, expected_sheet_name, sheet_properties)
+    return expected_sheet_name, True
+
+
+def get_invoice_item_rows(location: str) -> dict:
+    """invoice 시트에 쓰는 품목별 행 번호 반환"""
+    return INVOICE_SHEET_ITEM_ROWS.get(location, DEFAULT_INVOICE_ITEM_ROWS)
+
+
+def get_invoice_display_name(location: str) -> str:
+    """invoice 시트 업체명 표시값 반환"""
+    return INVOICE_SHEET_DISPLAY_NAMES.get(location, location)
+
+
+def build_invoice_sheet_update_data(
+    sheet_name: str,
+    location: str,
+    qty: dict,
+    month_str: str,
+    *,
+    include_setup: bool = False,
+) -> list:
+    """invoice 시트에 쓸 values.batchUpdate payload 생성"""
+    data = [
+        {'range': f"'{sheet_name}'!B8", 'values': [[month_str]]},
+    ]
+    item_rows = get_invoice_item_rows(location)
+    for item_key, row_number in item_rows.items():
+        data.append({
+            'range': f"'{sheet_name}'!D{row_number}",
+            'values': [[qty.get(item_key, 0)]],
+        })
+
+    if include_setup:
+        prices = get_location_prices(location)
+        data.append({
+            'range': f"'{sheet_name}'!B7",
+            'values': [[get_invoice_display_name(location)]],
+        })
+        for item_key, row_number in item_rows.items():
+            data.extend([
+                {
+                    'range': f"'{sheet_name}'!B{row_number}",
+                    'values': [[ITEM_NAMES[item_key]]],
+                },
+                {
+                    'range': f"'{sheet_name}'!F{row_number}",
+                    'values': [[prices[item_key]]],
+                },
+            ])
+
+    return data
 
 
 def list_invoice_sheets() -> bool:
@@ -1647,38 +1792,51 @@ def update_invoice_sheets(year: int, month: int, rows: list) -> bool:
 
     location_totals = {}
     for row in rows:
-        record_date, location, blanket, mat, pillow_cover, towel, _, _, _ = row
+        record_date, location, blanket, mat, pillow_cover, towel, body_towel, pillow_fill, cotton_blanket = row
         if not is_settlement_location_active(location, record_date):
             continue
         if location not in location_totals:
-            location_totals[location] = {'blanket': 0, 'mat': 0, 'pillow_cover': 0, 'towel': 0}
-        location_totals[location]['blanket'] += blanket or 0
-        location_totals[location]['mat'] += mat or 0
-        location_totals[location]['pillow_cover'] += pillow_cover or 0
-        location_totals[location]['towel'] += towel or 0
+            location_totals[location] = {item_key: 0 for item_key in ITEM_NAMES}
+        item_values = {
+            'blanket': blanket,
+            'mat': mat,
+            'pillow_cover': pillow_cover,
+            'towel': towel,
+            'body_towel': body_towel,
+            'pillow_fill': pillow_fill,
+            'cotton_blanket': cotton_blanket,
+        }
+        for item_key, value in item_values.items():
+            location_totals[location][item_key] += value or 0
 
     month_str = f'{year}년 {month}월'
     try:
-        sheet_titles = get_sheet_titles(CARRY_JUNGSAN_SPREADSHEET_ID, token)
+        sheet_properties = get_sheet_properties(CARRY_JUNGSAN_SPREADSHEET_ID, token)
     except Exception as e:
         print(f"invoice 시트 목록 조회 실패. 기존 매핑으로 진행: {e}")
-        sheet_titles = []
+        sheet_properties = []
 
     failures = []
     for location, qty in location_totals.items():
-        sheet_name = resolve_invoice_sheet_name(location, sheet_titles)
+        try:
+            sheet_name, sheet_created = ensure_invoice_sheet_name(location, token, sheet_properties)
+        except Exception as e:
+            print(f"  invoice 시트 준비 실패 ({location}): {e}")
+            failures.append(location)
+            continue
+
         if not sheet_name:
             print(f"  invoice 매핑 없음: {location}")
             failures.append(location)
             continue
         try:
-            data = [
-                {'range': f"'{sheet_name}'!B8",  'values': [[month_str]]},
-                {'range': f"'{sheet_name}'!D12", 'values': [[qty['blanket']]]},
-                {'range': f"'{sheet_name}'!D13", 'values': [[qty['mat']]]},
-                {'range': f"'{sheet_name}'!D14", 'values': [[qty['pillow_cover']]]},
-                {'range': f"'{sheet_name}'!D15", 'values': [[qty['towel']]]},
-            ]
+            data = build_invoice_sheet_update_data(
+                sheet_name,
+                location,
+                qty,
+                month_str,
+                include_setup=sheet_created or location in INVOICE_SHEET_TEMPLATE_MAP,
+            )
             _sheets_batch_update(CARRY_JUNGSAN_SPREADSHEET_ID, token, data)
             print(f"  invoice 시트 업데이트 완료: {sheet_name}")
         except Exception as e:

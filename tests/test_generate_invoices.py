@@ -311,6 +311,81 @@ class ProfitSummaryTests(unittest.TestCase):
 
         self.assertEqual(calls["invoice_sheets"], (2026, 6, rows))
 
+    def test_update_invoice_sheets_creates_missing_known_sheet_from_template(self):
+        batch_requests = []
+        value_updates = []
+        sheet_properties = [
+            {
+                "title": "invoice(거래명세서)_송파구 가락로28길 3-10 스테이브리즈 송파",
+                "sheetId": 101,
+            }
+        ]
+        rows = [
+            (
+                self.gi.date(2026, 6, 1),
+                "강남구 봉은사로37길 8",
+                33,
+                33,
+                62,
+                152,
+                0,
+                0,
+                0,
+            )
+        ]
+
+        self.gi.get_sheets_token = lambda: "token"
+        self.gi.get_sheet_properties = lambda spreadsheet_id, token: sheet_properties
+        self.gi._sheets_batch_request = lambda spreadsheet_id, token, requests: batch_requests.extend(requests)
+        self.gi._sheets_batch_update = lambda spreadsheet_id, token, data: value_updates.extend(data)
+
+        self.assertTrue(self.gi.update_invoice_sheets(2026, 6, rows))
+        self.assertEqual(
+            batch_requests[0]["duplicateSheet"]["newSheetName"],
+            "invoice(거래명세서)_강남구 봉은사로37길 8",
+        )
+        self.assertEqual(batch_requests[0]["duplicateSheet"]["sourceSheetId"], 101)
+
+        values_by_range = {
+            item["range"]: item["values"][0][0]
+            for item in value_updates
+        }
+        sheet_name = "invoice(거래명세서)_강남구 봉은사로37길 8"
+        self.assertEqual(values_by_range[f"'{sheet_name}'!B7"], "강남구 봉은사로37길 8")
+        self.assertEqual(values_by_range[f"'{sheet_name}'!B8"], "2026년 6월")
+        self.assertEqual(values_by_range[f"'{sheet_name}'!D12"], 33)
+        self.assertEqual(values_by_range[f"'{sheet_name}'!D15"], 152)
+        self.assertEqual(values_by_range[f"'{sheet_name}'!F13"], 2_000)
+        self.assertEqual(values_by_range[f"'{sheet_name}'!F15"], 500)
+
+    def test_jangchung_invoice_sheet_data_includes_extra_item_rows(self):
+        sheet_name = "invoice(거래명세서)_장충동 메종드브릭"
+        data = self.gi.build_invoice_sheet_update_data(
+            sheet_name,
+            "중구 장충단로 225",
+            {
+                "blanket": 511,
+                "mat": 513,
+                "pillow_cover": 783,
+                "towel": 1409,
+                "body_towel": 862,
+                "cotton_blanket": 6,
+            },
+            "2026년 6월",
+            include_setup=True,
+        )
+        values_by_range = {
+            item["range"]: item["values"][0][0]
+            for item in data
+        }
+
+        self.assertEqual(values_by_range[f"'{sheet_name}'!B7"], "장충동 메종드브릭")
+        self.assertEqual(values_by_range[f"'{sheet_name}'!D16"], 862)
+        self.assertEqual(values_by_range[f"'{sheet_name}'!D17"], 6)
+        self.assertEqual(values_by_range[f"'{sheet_name}'!B17"], "솜 이불")
+        self.assertEqual(values_by_range[f"'{sheet_name}'!F16"], 1_100)
+        self.assertEqual(values_by_range[f"'{sheet_name}'!F17"], 15_000)
+
 
 if __name__ == "__main__":
     unittest.main()
