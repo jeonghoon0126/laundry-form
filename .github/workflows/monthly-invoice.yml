@@ -13,6 +13,15 @@ on:
       month:
         description: 'Month (1-12)'
         required: false
+      mode:
+        description: 'Run mode'
+        required: false
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - invoice_sheets_only
+          - list_invoice_sheets
 
 jobs:
   generate:
@@ -59,6 +68,7 @@ jobs:
           SUPABASE_URI: ${{ secrets.SUPABASE_URI }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           SHEETS_SERVICE_ACCOUNT: ${{ secrets.SHEETS_SERVICE_ACCOUNT }}
+          INVOICE_JOB_MODE: ${{ inputs.mode || 'full' }}
         run: |
           if [ -n "${{ inputs.year }}" ] && [ -n "${{ inputs.month }}" ]; then
             python scripts/generate_invoices.py ${{ inputs.year }} ${{ inputs.month }}

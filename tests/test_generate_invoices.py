@@ -1,6 +1,9 @@
 import importlib.util
+import os
 from pathlib import Path
+import sys
 import unittest
+from unittest.mock import patch
 
 
 def load_generate_invoices():
@@ -256,6 +259,57 @@ class ProfitSummaryTests(unittest.TestCase):
 
         self.assertTrue(self.gi.is_settlement_location_active(location, self.gi.date(2026, 5, 31)))
         self.assertFalse(self.gi.is_settlement_location_active(location, self.gi.date(2026, 6, 1)))
+
+    def test_resolve_invoice_sheet_name_allows_spacing_differences(self):
+        sheet_titles = [
+            "invoice(거래명세서)_강남구 봉은사로 37길 8",
+            "invoice(거래명세서)_장충동 메종 드 브릭",
+        ]
+
+        self.assertEqual(
+            self.gi.resolve_invoice_sheet_name("강남구 봉은사로37길 8", sheet_titles),
+            "invoice(거래명세서)_강남구 봉은사로 37길 8",
+        )
+        self.assertEqual(
+            self.gi.resolve_invoice_sheet_name("중구 장충단로 225", sheet_titles),
+            "invoice(거래명세서)_장충동 메종 드 브릭",
+        )
+
+    def test_invoice_sheets_only_mode_skips_email_generation(self):
+        calls = {}
+        rows = [
+            (
+                self.gi.date(2026, 6, 1),
+                "강남구 봉은사로37길 8",
+                1,
+                2,
+                3,
+                4,
+                0,
+                0,
+                0,
+            )
+        ]
+
+        self.gi.get_monthly_data = lambda year, month: rows
+        self.gi.update_invoice_sheets = lambda year, month, row_data: calls.setdefault(
+            "invoice_sheets", (year, month, row_data)
+        ) or True
+
+        def fail_if_called(*args, **kwargs):
+            raise AssertionError("email/PDF generation should not run in invoice_sheets_only mode")
+
+        self.gi.generate_pdf = fail_if_called
+        self.gi.generate_excel = fail_if_called
+        self.gi.send_report_email = fail_if_called
+        self.gi.send_email = fail_if_called
+        self.gi.update_profit_sheet = fail_if_called
+
+        with patch.dict(os.environ, {"INVOICE_JOB_MODE": "invoice_sheets_only"}), \
+                patch.object(sys, "argv", ["generate_invoices.py", "2026", "6"]):
+            self.gi.main()
+
+        self.assertEqual(calls["invoice_sheets"], (2026, 6, rows))
 
 
 if __name__ == "__main__":

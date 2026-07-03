@@ -11,6 +11,7 @@ import os
 import sys
 import smtplib
 import calendar
+import re
 from datetime import datetime, date, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -157,6 +158,13 @@ INVOICE_SHEET_MAP = {
     '송파구 가락로28길 3-10':       'invoice(거래명세서)_송파구 가락로28길 3-10 스테이브리즈 송파',
     '광진구 능동로 165-1':          'invoice(거래명세서)_능동로 165-1 화양프라하임',
     '동대문구 장한로26나길 21':     'invoice(거래명세서)_가회',
+}
+
+INVOICE_JOB_MODES = {'full', 'invoice_sheets_only', 'list_invoice_sheets'}
+
+INVOICE_SHEET_ALIASES = {
+    '중구 장충단로 225': ['장충동 메종드브릭', '메종드브릭', '장충단로 225'],
+    '강남구 봉은사로37길 8': ['강남구 봉은사로37길 8', '봉은사로37길 8', '봉은사로 37길 8'],
 }
 
 
@@ -1422,6 +1430,88 @@ def _sheets_batch_request(spreadsheet_id: str, token: str, requests: list):
         return _json.loads(resp.read())
 
 
+def _sheets_get_metadata(spreadsheet_id: str, token: str) -> dict:
+    """Sheets API spreadsheets.get"""
+    import urllib.request as _req
+    import urllib.parse as _up
+    import json as _json
+    fields = 'sheets(properties(sheetId,title))'
+    url = f'https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}?fields={_up.quote(fields)}'
+    req = _req.Request(url, headers={'Authorization': f'Bearer {token}'})
+    with _req.urlopen(req) as resp:
+        return _json.loads(resp.read())
+
+
+def get_sheet_titles(spreadsheet_id: str, token: str) -> list:
+    """스프레드시트의 탭 제목 목록 반환"""
+    metadata = _sheets_get_metadata(spreadsheet_id, token)
+    return [
+        sheet.get('properties', {}).get('title', '')
+        for sheet in metadata.get('sheets', [])
+        if sheet.get('properties', {}).get('title')
+    ]
+
+
+def normalize_sheet_key(value: str) -> str:
+    """탭 제목 비교용 정규화 키"""
+    return re.sub(r'[\s\W_]+', '', value or '').casefold()
+
+
+def resolve_invoice_sheet_name(location: str, sheet_titles: list) -> str:
+    """숙소 위치에 대응하는 실제 invoice 탭 제목 반환"""
+    expected = INVOICE_SHEET_MAP.get(location, '')
+    if not expected or not sheet_titles:
+        return expected
+
+    if expected in sheet_titles:
+        return expected
+
+    normalized_titles = {
+        normalize_sheet_key(title): title
+        for title in sheet_titles
+    }
+    normalized_expected = normalize_sheet_key(expected)
+    if normalized_expected in normalized_titles:
+        return normalized_titles[normalized_expected]
+
+    aliases = [expected, location] + INVOICE_SHEET_ALIASES.get(location, [])
+    for alias in aliases:
+        alias_key = normalize_sheet_key(alias)
+        if not alias_key:
+            continue
+        matches = [
+            title
+            for title in sheet_titles
+            if normalize_sheet_key(title).find(alias_key) != -1
+        ]
+        if len(matches) == 1:
+            return matches[0]
+
+    return expected
+
+
+def list_invoice_sheets() -> bool:
+    """캐리_정산 스프레드시트의 invoice 탭 목록 출력"""
+    token = get_sheets_token()
+    if not token:
+        print("Sheets 토큰 없음. invoice 시트 목록 조회 건너뜀.")
+        return False
+
+    try:
+        sheet_titles = get_sheet_titles(CARRY_JUNGSAN_SPREADSHEET_ID, token)
+        invoice_titles = [
+            title for title in sheet_titles
+            if title.startswith('invoice(거래명세서)_')
+        ]
+        print(f"invoice 시트 수: {len(invoice_titles)}개")
+        for title in invoice_titles:
+            print(f"  - {title}")
+        return True
+    except Exception as e:
+        print(f"invoice 시트 목록 조회 실패: {e}")
+        return False
+
+
 def format_profit_sheet_row(token: str, target_row: int):
     """영업이익계산 행 서식을 기존 완성 행 기준으로 복사"""
     if target_row == PROFIT_FORMAT_TEMPLATE_ROW:
@@ -1522,11 +1612,18 @@ def update_invoice_sheets(year: int, month: int, rows: list) -> bool:
         location_totals[location]['towel'] += towel or 0
 
     month_str = f'{year}년 {month}월'
+    try:
+        sheet_titles = get_sheet_titles(CARRY_JUNGSAN_SPREADSHEET_ID, token)
+    except Exception as e:
+        print(f"invoice 시트 목록 조회 실패. 기존 매핑으로 진행: {e}")
+        sheet_titles = []
 
+    failures = []
     for location, qty in location_totals.items():
-        sheet_name = INVOICE_SHEET_MAP.get(location)
+        sheet_name = resolve_invoice_sheet_name(location, sheet_titles)
         if not sheet_name:
             print(f"  invoice 매핑 없음: {location}")
+            failures.append(location)
             continue
         try:
             data = [
@@ -1540,13 +1637,26 @@ def update_invoice_sheets(year: int, month: int, rows: list) -> bool:
             print(f"  invoice 시트 업데이트 완료: {sheet_name}")
         except Exception as e:
             print(f"  invoice 시트 업데이트 실패 ({sheet_name}): {e}")
+            failures.append(sheet_name)
 
+    if failures:
+        print(f"invoice 시트 업데이트 실패 {len(failures)}건: {', '.join(failures)}")
+        return False
     return True
 
 
 # ============================================================
 # 메인
 # ============================================================
+
+def get_invoice_job_mode() -> str:
+    """정산 배치 실행 모드 반환"""
+    job_mode = os.environ.get('INVOICE_JOB_MODE', 'full').strip() or 'full'
+    if job_mode not in INVOICE_JOB_MODES:
+        allowed = ', '.join(sorted(INVOICE_JOB_MODES))
+        raise SystemExit(f"지원하지 않는 INVOICE_JOB_MODE: {job_mode} (허용: {allowed})")
+    return job_mode
+
 
 def main():
     # 대상 월 결정 (실행일이 말일이면 해당 월, 아니면 전월)
@@ -1569,6 +1679,13 @@ def main():
 
     print(f"=== {year}년 {month}월 세탁물 정산 ===")
     print(f"정산 기간: {format_settlement_period(year, month)}")
+    job_mode = get_invoice_job_mode()
+    print(f"실행 모드: {job_mode}")
+
+    if job_mode == 'list_invoice_sheets':
+        if not list_invoice_sheets():
+            sys.exit(1)
+        return
 
     # 데이터 조회
     rows = get_monthly_data(year, month)
@@ -1581,6 +1698,11 @@ def main():
     # 사업자별 집계
     business_data = aggregate_by_business(rows)
     print(f"사업자 수: {len(business_data)}개")
+
+    if job_mode == 'invoice_sheets_only':
+        if not update_invoice_sheets(year, month, rows):
+            sys.exit(1)
+        return
 
     # PDF 생성
     attachments = []
@@ -1632,7 +1754,8 @@ def main():
 
     # Google Sheets 업데이트
     update_profit_sheet(year, month, total_amount)
-    update_invoice_sheets(year, month, rows)
+    if not update_invoice_sheets(year, month, rows):
+        sys.exit(1)
 
     # 로컬 저장 (iCloud Drive 월별 폴더)
     if os.environ.get('SAVE_LOCAL'):
