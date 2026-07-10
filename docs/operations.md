@@ -30,9 +30,11 @@
 - push 후 GitHub Actions가 자동 실행된다.
 - 대상 워크플로우는 `.github/workflows/send-route-sms.yml`이다.
 - 주별 매출 보고 워크플로우는 `.github/workflows/weekly-revenue-report.yml`이며 매주 월요일 09:00 KST에 지난 월~일 매출을 `kham0126@gmail.com`으로 보낸다.
-- GitHub schedule은 월요일과 목요일 10:00 KST 기준이지만 실제 실행은 지연될 수 있다.
+- GitHub schedule은 월요일과 목요일 10:00 KST 1차, 10:30/11:00/11:30 KST 백업으로 실행한다.
+- 각 실행은 같은 날 또는 같은 target date의 실제 발송 성공 이력이 있으면 자동으로 건너뛰므로 중복 발송하지 않는다.
 - 실제 운영 발송은 GitHub Actions만 사용한다.
 - 같은 날 이미 성공 발송 run이 있으면 `scripts/dispatch_route_sms.py --check-only`가 중복 발송을 건너뛴다.
+- 누락 재발송은 GitHub Actions 수동 실행에서 `target_date=YYYY-MM-DD`, `dry_run=false`로 실행한다.
 - `scripts/dispatch_route_sms.py`는 필요할 때 수동으로 GitHub `workflow_dispatch`를 깨우는 보조 도구로만 둔다.
 - 오너 확인 문자는 `OWNER_PHONE` 비밀값 번호로 전체 동선 본문이 발송된다.
 

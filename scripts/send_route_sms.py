@@ -305,8 +305,11 @@ def send_sms(message: tuple[str, str], stop_count: int) -> None:
     print(f"[OK] 기사님 SMS 발송 완료 → {recipient}")
 
     if owner_phone:
-        _send_single(api_key, api_secret, sender, owner_phone, body, "LMS", subject)
-        print(f"[OK] 오너 동선 SMS 발송 완료 → {owner_phone}")
+        try:
+            _send_single(api_key, api_secret, sender, owner_phone, body, "LMS", subject)
+            print(f"[OK] 오너 동선 SMS 발송 완료 → {owner_phone}")
+        except Exception as exc:
+            print(f"[WARN] 오너 동선 SMS 발송 실패: {exc}")
 
 
 # ──────────────────────────────────────────────

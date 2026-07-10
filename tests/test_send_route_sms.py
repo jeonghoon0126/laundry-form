@@ -103,6 +103,53 @@ class SendRouteSmsTests(unittest.TestCase):
         self.assertIn("왕산로 200, 1004호", july_last_thursday)
         self.assertIn("청량리는 다음 일정 8/10(월)", august_body)
 
+    def test_owner_sms_failure_does_not_retry_driver_sms(self):
+        calls = []
+
+        def fake_send_single(api_key, api_secret, sender, to, text, msg_type="LMS", subject=""):
+            calls.append(to)
+            if to == "owner":
+                raise RuntimeError("owner failed")
+
+        self.sms._send_single = fake_send_single
+        old_env = dict(self.sms.os.environ)
+        try:
+            self.sms.os.environ.update({
+                "SOLAPI_API_KEY": "key",
+                "SOLAPI_API_SECRET": "secret",
+                "SOLAPI_SENDER": "sender",
+                "RECIPIENT_PHONE": "driver",
+                "OWNER_PHONE": "owner",
+            })
+
+            self.sms.send_sms(("subject", "body"), 1)
+        finally:
+            self.sms.os.environ.clear()
+            self.sms.os.environ.update(old_env)
+
+        self.assertEqual(calls, ["driver", "owner"])
+
+    def test_driver_sms_failure_still_fails_workflow(self):
+        def fake_send_single(api_key, api_secret, sender, to, text, msg_type="LMS", subject=""):
+            raise RuntimeError("driver failed")
+
+        self.sms._send_single = fake_send_single
+        old_env = dict(self.sms.os.environ)
+        try:
+            self.sms.os.environ.update({
+                "SOLAPI_API_KEY": "key",
+                "SOLAPI_API_SECRET": "secret",
+                "SOLAPI_SENDER": "sender",
+                "RECIPIENT_PHONE": "driver",
+                "OWNER_PHONE": "owner",
+            })
+
+            with self.assertRaises(RuntimeError):
+                self.sms.send_sms(("subject", "body"), 1)
+        finally:
+            self.sms.os.environ.clear()
+            self.sms.os.environ.update(old_env)
+
 
 if __name__ == "__main__":
     unittest.main()
