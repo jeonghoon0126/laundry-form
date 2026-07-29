@@ -60,6 +60,7 @@ BUSINESS_MAP = {
     '동대문구 장한로26나길 21': ('767-87-02214', '주식회사 콥스', '남택호'),
     '광진구 능동로 165-1': ('767-87-02214', '주식회사 콥스', '남택호'),
     '강남구 봉은사로37길 8': ('767-87-02214', '주식회사 콥스', '남택호'),
+    '서울특별시 용산구 회나무로 50 (이태원동)': ('767-87-02214', '주식회사 콥스', '남택호'),
     '송파구 가락로28길 3-10': ('767-87-02214', '주식회사 콥스', '남택호'),
     '동대문구 회기로 189': ('419-11-02853', '오를리(Orly)', '김지혜'),
     '관악구 신림동1길 19-5': ('461-86-03598', '주식회사스테이모먼트', '유경민'),
@@ -93,6 +94,10 @@ LOCATION_PRICES = {
 
 STAYMOMENT_LOCATION = '관악구 신림동1길 19-5'
 STAYMOMENT_SETTLEMENT_END_DATE = date(2026, 5, 1)
+JANGHANPYEONG_LOCATION = '동대문구 장한로26나길 21'
+JANGHANPYEONG_SETTLEMENT_END_DATE = date(2026, 6, 1)
+ITAEWON_LOCATION = '서울특별시 용산구 회나무로 50 (이태원동)'
+ITAEWON_SETTLEMENT_START_DATE = date(2026, 8, 1)
 LAST_DAY_CARRYOVER_START_DATE = date(2026, 4, 30)
 
 ITEM_NAMES = {
@@ -116,15 +121,17 @@ PROFIT_FORMAT_TEMPLATE_ROW = 4
 
 SHEETS_FIXED_COSTS = {
     'hourly_wage': 12000,          # D열: 시급
-    'monthly_labor_cost': 2000000, # E열: 월 고정 인건비
+    'labor_hours_baseline': 190,   # 인건비 산정 기준 시간
+    'labor_revenue_baseline': 7457500, # 인건비 비율 기준 매출
     'logistics_count': 9,          # F열: 물류 횟수
     'logistics_cost_per': 120000,  # G열: 물류 1회 비용
     'rent_utility': 770000,        # I열: 월세+관리비
-    'electricity': 150000,         # J열: 전기세
+    'electricity': 250000,         # J열: 전기세
     'water': 100000,               # K열: 수도세
     'insurance': 60000,            # L열: 보험
-    'supplies_rate': 0.03,         # M열: 소모품
+    'supplies_rate': 0.04,         # M열: 소모품
     'withholding_tax_rate': 0.033, # N열: 원천세
+    'vat_rate_on_net': 0.10,       # 부가세: 부가세 제외 전 이익의 10%
 }
 
 INVOICE_SHEET_MAP = {
@@ -135,6 +142,7 @@ INVOICE_SHEET_MAP = {
     '동대문구 고산자로 508-3':      'invoice(거래명세서)_동대문구 고산자로 508-3, 스테이브리즈',
     '동대문구 왕산로 200, 1004호':  'invoice(거래명세서)_동대문구 왕산로 200, 청량리역 롯데캐슬 SKY-L65',
     '강남구 봉은사로37길 8':        'invoice(거래명세서)_강남구 봉은사로37길 8',
+    '서울특별시 용산구 회나무로 50 (이태원동)': 'invoice(거래명세서)_이태원 회나무로 50',
     '송파구 가락로28길 3-10':       'invoice(거래명세서)_송파구 가락로28길 3-10 스테이브리즈 송파',
     '광진구 능동로 165-1':          'invoice(거래명세서)_능동로 165-1 화양프라하임',
     '동대문구 장한로26나길 21':     'invoice(거래명세서)_가회',
@@ -161,6 +169,10 @@ def get_location_prices(location: str) -> dict:
 def is_settlement_location_active(location: str, record_date: date) -> bool:
     """정산 대상 숙소 여부"""
     if location == STAYMOMENT_LOCATION and record_date >= STAYMOMENT_SETTLEMENT_END_DATE:
+        return False
+    if location == JANGHANPYEONG_LOCATION and record_date >= JANGHANPYEONG_SETTLEMENT_END_DATE:
+        return False
+    if location == ITAEWON_LOCATION and record_date < ITAEWON_SETTLEMENT_START_DATE:
         return False
     return True
 
@@ -207,15 +219,21 @@ def calculate_supplies_cost(total_amount: int) -> int:
     return round(total_amount * SHEETS_FIXED_COSTS['supplies_rate'])
 
 
+def calculate_labor_cost(total_amount: int) -> int:
+    """기준 월 인건비를 매출 비율로 환산"""
+    FC = SHEETS_FIXED_COSTS
+    baseline_labor_cost = FC['hourly_wage'] * FC['labor_hours_baseline']
+    return round(total_amount * baseline_labor_cost / FC['labor_revenue_baseline'])
+
+
 def calculate_profit_summary(total_amount: int) -> dict:
     """정산 매출 기준 영업이익 요약 계산"""
     FC = SHEETS_FIXED_COSTS
-    labor_cost = FC['monthly_labor_cost']
+    labor_cost = calculate_labor_cost(total_amount)
     logistics_cost = FC['logistics_count'] * FC['logistics_cost_per']
     supplies_cost = calculate_supplies_cost(total_amount)
     withholding_tax = round((logistics_cost + labor_cost) * FC['withholding_tax_rate'])
-    vat = round(total_amount / 11)
-    total_cost = (
+    pre_vat_cost = (
         labor_cost
         + logistics_cost
         + FC['rent_utility']
@@ -224,8 +242,10 @@ def calculate_profit_summary(total_amount: int) -> dict:
         + FC['insurance']
         + supplies_cost
         + withholding_tax
-        + vat
     )
+    vat_base = max(0, total_amount - pre_vat_cost)
+    vat = round(vat_base * FC['vat_rate_on_net'])
+    total_cost = pre_vat_cost + vat
     operating_profit = total_amount - total_cost
     operating_margin = operating_profit / total_amount if total_amount else 0
     return {

@@ -3,8 +3,12 @@
 - 고정 스케줄 기반 (월요일/목요일)
 - 2026-04-09(목): 청량리 1회 추가
 - 2026-04-06(월) 기준: 2주 간격 월요일 청량리 추가
+- 2026-07-01~2026-07-31: 청량리 월·목 추가
+- 2026-08-01부터: 기존 2주 간격 월요일 주기로 복귀
 - 목요일: 장한평 포함
 - 2026-05-28(목)부터 강남 추가, 부평 출발/복귀 기준 동선 적용
+- 2026-06-01(월)부터 장한평 운영 중지로 동선 제외
+- 2026-08-01(토)부터 이태원 숙소 추가
 - Solapi API로 기사님께 LMS 발송
 """
 
@@ -70,7 +74,15 @@ LOCATIONS: dict[str, dict] = {
     "봉은사로37길 8": {
         "region": "강남",
         "name": "신규 숙소",
-        "access": "상세주소/출입정보 확인 필요",
+        "address": "서울 강남구 봉은사로37길 8",
+        "access": "건물출입: 종버튼 +2580 / 엘리베이터 5층 / 5층 엘리베이터 옆 수납창고 자물쇠 000*",
+        "parking": "주차장 협소: 건물 앞 정차 권장",
+    },
+    "회나무로 50": {
+        "region": "이태원",
+        "name": "이태원 숙소",
+        "address": "서울특별시 용산구 회나무로 50 (이태원동)",
+        "access": "엘리베이터 있음 / 5층 엘리베이터 진입 후 반층 위 렉 설치 예정",
         "parking": None,
     },
     "신림동1길 19-5": {
@@ -101,10 +113,15 @@ WANGSANRO_KEY = "왕산로 200, 1004호"
 JANGHANPYEONG_KEY = "장한로26나길 21"
 STAYMOMENT_KEY = "신림동1길 19-5"
 GANGNAM_KEY = "봉은사로37길 8"
+ITAEWON_KEY = "회나무로 50"
 WANGSANRO_ONE_OFF_DATE = date(2026, 4, 9)
 WANGSANRO_BIWEEKLY_ANCHOR = date(2026, 4, 6)
+WANGSANRO_JULY_ROUTE_START = date(2026, 7, 1)
+WANGSANRO_JULY_ROUTE_END = date(2026, 7, 31)
 STAYMOMENT_ROUTE_END_DATE = date(2026, 5, 1)
 GANGNAM_ROUTE_START_DATE = date(2026, 5, 28)
+JANGHANPYEONG_ROUTE_END_DATE = date(2026, 6, 1)
+ITAEWON_ROUTE_START_DATE = date(2026, 8, 1)
 
 
 def _insert_after(route: list[str], after_key: str, target_key: str) -> list[str]:
@@ -113,11 +130,24 @@ def _insert_after(route: list[str], after_key: str, target_key: str) -> list[str
 
 
 def _should_include_wangsanro(today: date) -> bool:
+    if _is_july_wangsanro_route_day(today):
+        return True
     if today == WANGSANRO_ONE_OFF_DATE:
         return True
     if today.weekday() != 0 or today < WANGSANRO_BIWEEKLY_ANCHOR:
         return False
     return (today - WANGSANRO_BIWEEKLY_ANCHOR).days % 14 == 0
+
+
+def _is_july_wangsanro_route_day(today: date) -> bool:
+    return (
+        WANGSANRO_JULY_ROUTE_START <= today <= WANGSANRO_JULY_ROUTE_END
+        and today.weekday() in (0, 3)
+    )
+
+
+def _should_include_janghanpyeong(today: date) -> bool:
+    return today.weekday() == 3 and today < JANGHANPYEONG_ROUTE_END_DATE
 
 
 def _next_wangsanro_date(today: date) -> date:
@@ -141,7 +171,7 @@ def _bupyeong_roundtrip_route(today: date) -> list[str]:
         "능동로 165-1",
     ]
 
-    if today.weekday() == 3:
+    if _should_include_janghanpyeong(today):
         route.append(JANGHANPYEONG_KEY)
 
     if _should_include_wangsanro(today):
@@ -151,8 +181,12 @@ def _bupyeong_roundtrip_route(today: date) -> list[str]:
         "회기로 189",
         "고산자로 508-3",
         "장충단로 225",
-        "연희로4길 25-7",
     ])
+
+    if today >= ITAEWON_ROUTE_START_DATE:
+        route.append(ITAEWON_KEY)
+
+    route.append("연희로4길 25-7")
     return route
 
 
@@ -173,7 +207,7 @@ def get_route(today: date) -> list[str]:
     if today >= STAYMOMENT_ROUTE_END_DATE:
         route.remove(STAYMOMENT_KEY)
 
-    if weekday == 3:  # 목요일 — 장한평 포함 (건대 다음)
+    if _should_include_janghanpyeong(today):  # 목요일 — 장한평 포함 (건대 다음)
         route = _insert_after(route, "능동로 165-1", JANGHANPYEONG_KEY)
 
     if _should_include_wangsanro(today):  # 청량리 포함 (회기 다음, 건대 전)
@@ -196,8 +230,8 @@ def get_next_notes(today: date, route: list[str]) -> list[str]:
         next_weekday = WEEKDAY_KO[next_wangsanro.weekday()]
         notes.append(f"청량리는 다음 일정 {next_wangsanro.month}/{next_wangsanro.day}({next_weekday})")
 
-    if JANGHANPYEONG_KEY not in route:
-        next_thu = _next_thursday(today)
+    next_thu = _next_thursday(today)
+    if JANGHANPYEONG_KEY not in route and next_thu < JANGHANPYEONG_ROUTE_END_DATE:
         notes.append(f"장한평은 목요일({next_thu.month}/{next_thu.day})")
 
     return notes
@@ -221,7 +255,7 @@ def build_message(today: date, route: list[str]) -> tuple[str, str]:
         num = CIRCLED_NUMS[i]
         lines.append(f"{num} {info['region']} | {info['name']}")
         lines.append("")
-        lines.append(loc_key)
+        lines.append(info.get("address", loc_key))
         lines.append(info["access"])
         if info.get("parking"):
             lines.append(info["parking"])
