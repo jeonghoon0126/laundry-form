@@ -3,8 +3,7 @@
 - 고정 스케줄 기반 (월요일/목요일)
 - 2026-04-09(목): 청량리 1회 추가
 - 2026-04-06(월) 기준: 2주 간격 월요일 청량리 추가
-- 2026-07-01~2026-07-31: 청량리 월·목 추가
-- 2026-08-01부터: 기존 2주 간격 월요일 주기로 복귀
+- 2026-07-01부터: 청량리 월·목 계속 추가
 - 목요일: 장한평 포함
 - 2026-05-28(목)부터 강남 추가, 부평 출발/복귀 기준 동선 적용
 - 2026-06-01(월)부터 장한평 운영 중지로 동선 제외
@@ -116,8 +115,7 @@ GANGNAM_KEY = "봉은사로37길 8"
 ITAEWON_KEY = "회나무로 50"
 WANGSANRO_ONE_OFF_DATE = date(2026, 4, 9)
 WANGSANRO_BIWEEKLY_ANCHOR = date(2026, 4, 6)
-WANGSANRO_JULY_ROUTE_START = date(2026, 7, 1)
-WANGSANRO_JULY_ROUTE_END = date(2026, 7, 31)
+WANGSANRO_DUAL_ROUTE_START = date(2026, 7, 1)
 STAYMOMENT_ROUTE_END_DATE = date(2026, 5, 1)
 GANGNAM_ROUTE_START_DATE = date(2026, 5, 28)
 JANGHANPYEONG_ROUTE_END_DATE = date(2026, 6, 1)
@@ -130,7 +128,7 @@ def _insert_after(route: list[str], after_key: str, target_key: str) -> list[str
 
 
 def _should_include_wangsanro(today: date) -> bool:
-    if _is_july_wangsanro_route_day(today):
+    if _is_wangsanro_dual_route_day(today):
         return True
     if today == WANGSANRO_ONE_OFF_DATE:
         return True
@@ -139,11 +137,8 @@ def _should_include_wangsanro(today: date) -> bool:
     return (today - WANGSANRO_BIWEEKLY_ANCHOR).days % 14 == 0
 
 
-def _is_july_wangsanro_route_day(today: date) -> bool:
-    return (
-        WANGSANRO_JULY_ROUTE_START <= today <= WANGSANRO_JULY_ROUTE_END
-        and today.weekday() in (0, 3)
-    )
+def _is_wangsanro_dual_route_day(today: date) -> bool:
+    return today >= WANGSANRO_DUAL_ROUTE_START and today.weekday() in (0, 3)
 
 
 def _should_include_janghanpyeong(today: date) -> bool:

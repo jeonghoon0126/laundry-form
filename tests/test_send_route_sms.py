@@ -84,18 +84,29 @@ class SendRouteSmsTests(unittest.TestCase):
         self.assertIn("5층 엘리베이터 옆 수납창고 자물쇠 000*", body)
         self.assertIn("주차장 협소: 건물 앞 정차 권장", body)
 
-    def test_wangsanro_returns_to_biweekly_monday_cycle_in_august(self):
+    def test_wangsanro_keeps_july_monday_thursday_schedule_from_august(self):
         july_last_thursday = self.sms.get_route(date(2026, 7, 30))
         august_first_monday = self.sms.get_route(date(2026, 8, 3))
+        august_first_thursday = self.sms.get_route(date(2026, 8, 6))
         august_second_monday = self.sms.get_route(date(2026, 8, 10))
         august_third_monday = self.sms.get_route(date(2026, 8, 17))
-        august_fourth_monday = self.sms.get_route(date(2026, 8, 24))
+        august_third_thursday = self.sms.get_route(date(2026, 8, 20))
+        _, august_first_monday_body = self.sms.build_message(date(2026, 8, 3), august_first_monday)
 
         self.assertIn("왕산로 200, 1004호", july_last_thursday)
-        self.assertNotIn("왕산로 200, 1004호", august_first_monday)
+        self.assertIn("왕산로 200, 1004호", august_first_monday)
+        self.assertIn("왕산로 200, 1004호", august_first_thursday)
         self.assertIn("왕산로 200, 1004호", august_second_monday)
-        self.assertNotIn("왕산로 200, 1004호", august_third_monday)
-        self.assertIn("왕산로 200, 1004호", august_fourth_monday)
+        self.assertIn("왕산로 200, 1004호", august_third_monday)
+        self.assertIn("왕산로 200, 1004호", august_third_thursday)
+        self.assertNotIn("청량리는 다음 일정", august_first_monday_body)
+
+    def test_wangsanro_biweekly_schedule_is_preserved_before_july_override(self):
+        june_first_monday = self.sms.get_route(date(2026, 6, 1))
+        june_second_monday = self.sms.get_route(date(2026, 6, 8))
+
+        self.assertIn("왕산로 200, 1004호", june_first_monday)
+        self.assertNotIn("왕산로 200, 1004호", june_second_monday)
 
     def test_itaewon_is_added_to_august_route_after_jangchung(self):
         route = self.sms.get_route(date(2026, 8, 3))
@@ -104,6 +115,7 @@ class SendRouteSmsTests(unittest.TestCase):
             "봉은사로37길 8",
             "가락로28길 3-10",
             "능동로 165-1",
+            "왕산로 200, 1004호",
             "회기로 189",
             "고산자로 508-3",
             "장충단로 225",
