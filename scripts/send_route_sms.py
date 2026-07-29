@@ -7,7 +7,7 @@
 - 목요일: 장한평 포함
 - 2026-05-28(목)부터 강남 추가, 부평 출발/복귀 기준 동선 적용
 - 2026-06-01(월)부터 장한평 운영 중지로 동선 제외
-- 2026-08-01(토)부터 이태원 숙소 추가
+- 2026-07-30(목)부터 이태원 숙소 추가
 - Solapi API로 기사님께 LMS 발송
 """
 
@@ -118,7 +118,7 @@ WANGSANRO_DUAL_ROUTE_START = date(2026, 7, 1)
 STAYMOMENT_ROUTE_END_DATE = date(2026, 5, 1)
 GANGNAM_ROUTE_START_DATE = date(2026, 5, 28)
 JANGHANPYEONG_ROUTE_END_DATE = date(2026, 6, 1)
-ITAEWON_ROUTE_START_DATE = date(2026, 8, 1)
+ITAEWON_ROUTE_START_DATE = date(2026, 7, 30)
 
 
 def _insert_after(route: list[str], after_key: str, target_key: str) -> list[str]:
