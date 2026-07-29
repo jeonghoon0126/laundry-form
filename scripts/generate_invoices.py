@@ -61,6 +61,7 @@ BUSINESS_MAP = {
     '동대문구 장한로26나길 21': ('767-87-02214', '주식회사 콥스', '남택호'),
     '광진구 능동로 165-1': ('767-87-02214', '주식회사 콥스', '남택호'),
     '강남구 봉은사로37길 8': ('767-87-02214', '주식회사 콥스', '남택호'),
+    '서울특별시 용산구 회나무로 50 (이태원동)': ('767-87-02214', '주식회사 콥스', '남택호'),
     '송파구 가락로28길 3-10': ('767-87-02214', '주식회사 콥스', '남택호'),
     '동대문구 회기로 189': ('419-11-02853', '오를리(Orly)', '김지혜'),
     '관악구 신림동1길 19-5': ('461-86-03598', '주식회사스테이모먼트', '유경민'),
@@ -96,6 +97,8 @@ STAYMOMENT_LOCATION = '관악구 신림동1길 19-5'
 STAYMOMENT_SETTLEMENT_END_DATE = date(2026, 5, 1)
 JANGHANPYEONG_LOCATION = '동대문구 장한로26나길 21'
 JANGHANPYEONG_SETTLEMENT_END_DATE = date(2026, 6, 1)
+ITAEWON_LOCATION = '서울특별시 용산구 회나무로 50 (이태원동)'
+ITAEWON_SETTLEMENT_START_DATE = date(2026, 8, 1)
 LAST_DAY_CARRYOVER_START_DATE = date(2026, 4, 30)
 
 ITEM_NAMES = {
@@ -155,6 +158,7 @@ INVOICE_SHEET_MAP = {
     '동대문구 고산자로 508-3':      'invoice(거래명세서)_동대문구 고산자로 508-3, 스테이브리즈',
     '동대문구 왕산로 200, 1004호':  'invoice(거래명세서)_동대문구 왕산로 200, 청량리역 롯데캐슬 SKY-L65',
     '강남구 봉은사로37길 8':        'invoice(거래명세서)_강남구 봉은사로37길 8',
+    '서울특별시 용산구 회나무로 50 (이태원동)': 'invoice(거래명세서)_이태원 회나무로 50',
     '송파구 가락로28길 3-10':       'invoice(거래명세서)_송파구 가락로28길 3-10 스테이브리즈 송파',
     '광진구 능동로 165-1':          'invoice(거래명세서)_능동로 165-1 화양프라하임',
     '동대문구 장한로26나길 21':     'invoice(거래명세서)_가회',
@@ -220,6 +224,8 @@ def is_settlement_location_active(location: str, record_date: date) -> bool:
     if location == STAYMOMENT_LOCATION and record_date >= STAYMOMENT_SETTLEMENT_END_DATE:
         return False
     if location == JANGHANPYEONG_LOCATION and record_date >= JANGHANPYEONG_SETTLEMENT_END_DATE:
+        return False
+    if location == ITAEWON_LOCATION and record_date < ITAEWON_SETTLEMENT_START_DATE:
         return False
     return True
 

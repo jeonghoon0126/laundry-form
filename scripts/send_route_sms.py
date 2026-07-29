@@ -4,9 +4,11 @@
 - 2026-04-09(목): 청량리 1회 추가
 - 2026-04-06(월) 기준: 2주 간격 월요일 청량리 추가
 - 2026-07-01~2026-07-31: 청량리 월·목 추가
+- 2026-08-01부터: 기존 2주 간격 월요일 주기로 복귀
 - 목요일: 장한평 포함
 - 2026-05-28(목)부터 강남 추가, 부평 출발/복귀 기준 동선 적용
 - 2026-06-01(월)부터 장한평 운영 중지로 동선 제외
+- 2026-08-01(토)부터 이태원 숙소 추가
 - Solapi API로 기사님께 LMS 발송
 """
 
@@ -76,6 +78,13 @@ LOCATIONS: dict[str, dict] = {
         "access": "건물출입 종버튼 +2580 / 엘리베이터 이동 / 5층 엘리베이터 옆 수납창고 자물쇠 000*",
         "parking": "주차장 협소, 건물 앞 정차 권장",
     },
+    "회나무로 50": {
+        "region": "이태원",
+        "name": "이태원 숙소",
+        "address": "서울특별시 용산구 회나무로 50 (이태원동)",
+        "access": "엘리베이터 있음 / 5층 엘리베이터 진입 후 반층 위 렉 설치 예정",
+        "parking": None,
+    },
     "신림동1길 19-5": {
         "region": "신림",
         "name": "스테이모먼트",
@@ -111,6 +120,7 @@ WANGSANRO_JULY_ROUTE_END = date(2026, 7, 31)
 STAYMOMENT_ROUTE_END_DATE = date(2026, 5, 1)
 GANGNAM_ROUTE_START_DATE = date(2026, 5, 28)
 JANGHANPYEONG_ROUTE_END_DATE = date(2026, 6, 1)
+ITAEWON_ROUTE_START_DATE = date(2026, 8, 1)
 
 
 def _insert_after(route: list[str], after_key: str, target_key: str) -> list[str]:
@@ -170,8 +180,10 @@ def _bupyeong_roundtrip_route(today: date) -> list[str]:
         "회기로 189",
         "고산자로 508-3",
         "장충단로 225",
-        "연희로4길 25-7",
     ])
+    if today >= ITAEWON_ROUTE_START_DATE:
+        route.append("회나무로 50")
+    route.append("연희로4길 25-7")
     return route
 
 

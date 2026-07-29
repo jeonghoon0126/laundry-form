@@ -260,6 +260,16 @@ class ProfitSummaryTests(unittest.TestCase):
         self.assertTrue(self.gi.is_settlement_location_active(location, self.gi.date(2026, 5, 31)))
         self.assertFalse(self.gi.is_settlement_location_active(location, self.gi.date(2026, 6, 1)))
 
+    def test_itaewon_location_uses_kops_and_starts_on_2026_08_01(self):
+        location = "서울특별시 용산구 회나무로 50 (이태원동)"
+        reg_no, name, owner = self.gi.BUSINESS_MAP[location]
+
+        self.assertEqual((reg_no, name, owner), ("767-87-02214", "주식회사 콥스", "남택호"))
+        self.assertEqual(self.gi.get_location_prices(location), self.gi.PRICES)
+        self.assertIn(location, self.gi.INVOICE_SHEET_MAP)
+        self.assertFalse(self.gi.is_settlement_location_active(location, self.gi.date(2026, 7, 31)))
+        self.assertTrue(self.gi.is_settlement_location_active(location, self.gi.date(2026, 8, 1)))
+
     def test_resolve_invoice_sheet_name_allows_spacing_differences(self):
         sheet_titles = [
             "invoice(거래명세서)_강남구 봉은사로 37길 8",
