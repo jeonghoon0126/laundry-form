@@ -107,6 +107,29 @@ class SendRouteSmsTests(unittest.TestCase):
         self.assertIn("왕산로 200, 1004호", june_first_monday)
         self.assertNotIn("왕산로 200, 1004호", june_second_monday)
 
+    def test_itaewon_is_added_after_jangchung_from_august(self):
+        route = self.sms.get_route(date(2026, 8, 3))
+
+        self.assertEqual(route, [
+            "봉은사로37길 8",
+            "가락로28길 3-10",
+            "능동로 165-1",
+            "왕산로 200, 1004호",
+            "회기로 189",
+            "고산자로 508-3",
+            "장충단로 225",
+            "회나무로 50",
+            "연희로4길 25-7",
+        ])
+
+    def test_itaewon_message_includes_access_detail(self):
+        route = self.sms.get_route(date(2026, 8, 3))
+        _, body = self.sms.build_message(date(2026, 8, 3), route)
+
+        self.assertIn("이태원 | 이태원 숙소", body)
+        self.assertIn("서울특별시 용산구 회나무로 50 (이태원동)", body)
+        self.assertIn("5층 엘리베이터 진입 후 반층 위 렉 설치 예정", body)
+
     def test_owner_sms_failure_does_not_retry_driver_sms(self):
         calls = []
 

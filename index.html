@@ -1001,11 +1001,14 @@
       '동대문구 장한로26나길 21',
       '광진구 능동로 165-1',
       '강남구 봉은사로37길 8',
+      '서울특별시 용산구 회나무로 50 (이태원동)',
       '송파구 가락로28길 3-10',
       '관악구 신림동1길 19-5'
     ];
     const JANGHANPYEONG_LOCATION = '동대문구 장한로26나길 21';
     const JANGHANPYEONG_END_DATE = '2026-06-01';
+    const ITAEWON_LOCATION = '서울특별시 용산구 회나무로 50 (이태원동)';
+    const ITAEWON_START_DATE = '2026-08-01';
 
     const items = [
       { id: 'blanket', name: '이불', icon: 'bed' },
@@ -1050,7 +1053,11 @@
     }
 
     function getInputLocations(date) {
-      return locations.filter(loc => !(loc === JANGHANPYEONG_LOCATION && date >= JANGHANPYEONG_END_DATE));
+      return locations.filter(loc => {
+        if (loc === JANGHANPYEONG_LOCATION && date >= JANGHANPYEONG_END_DATE) return false;
+        if (loc === ITAEWON_LOCATION && date < ITAEWON_START_DATE) return false;
+        return true;
+      });
     }
 
     function renderLocationInputs() {
@@ -1306,6 +1313,11 @@
         pillow_fill: parseInt(document.getElementById('editPillowFill').value) || 0,
         cotton_blanket: parseInt(document.getElementById('editCottonBlanket').value) || 0
       };
+
+      if (data.location === ITAEWON_LOCATION && data.record_date < ITAEWON_START_DATE) {
+        showToast('이태원 숙소는 2026-08-01부터 입력할 수 있습니다', 'error');
+        return;
+      }
 
       document.getElementById('loading').classList.add('show');
 
