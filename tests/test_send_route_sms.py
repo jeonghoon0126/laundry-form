@@ -107,6 +107,13 @@ class SendRouteSmsTests(unittest.TestCase):
         self.assertIn("왕산로 200, 1004호", june_first_monday)
         self.assertNotIn("왕산로 200, 1004호", june_second_monday)
 
+    def test_itaewon_route_starts_on_2026_07_30(self):
+        july_23_route = self.sms.get_route(date(2026, 7, 23))
+        july_30_route = self.sms.get_route(date(2026, 7, 30))
+
+        self.assertNotIn("회나무로 50", july_23_route)
+        self.assertIn("회나무로 50", july_30_route)
+
     def test_itaewon_is_added_after_jangchung_from_august(self):
         route = self.sms.get_route(date(2026, 8, 3))
 
