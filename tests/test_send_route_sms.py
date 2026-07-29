@@ -87,21 +87,25 @@ class SendRouteSmsTests(unittest.TestCase):
         self.assertIn("자물쇠 000*", body)
         self.assertNotIn("상세주소/출입정보 확인 필요", body)
 
-    def test_wangsanro_is_added_on_july_monday_and_thursday_only(self):
+    def test_wangsanro_keeps_july_monday_thursday_schedule_from_august(self):
         july_thursday = self.sms.get_route(date(2026, 7, 2))
         july_monday = self.sms.get_route(date(2026, 7, 6))
         august_monday = self.sms.get_route(date(2026, 8, 3))
+        august_thursday = self.sms.get_route(date(2026, 8, 6))
+        _, august_body = self.sms.build_message(date(2026, 8, 3), august_monday)
 
         self.assertIn("왕산로 200, 1004호", july_thursday)
         self.assertIn("왕산로 200, 1004호", july_monday)
-        self.assertNotIn("왕산로 200, 1004호", august_monday)
+        self.assertIn("왕산로 200, 1004호", august_monday)
+        self.assertIn("왕산로 200, 1004호", august_thursday)
+        self.assertNotIn("청량리는 다음 일정", august_body)
 
-    def test_wangsanro_july_override_keeps_last_thursday_and_august_note(self):
-        july_last_thursday = self.sms.get_route(date(2026, 7, 30))
-        _, august_body = self.sms.build_message(date(2026, 8, 3), self.sms.get_route(date(2026, 8, 3)))
+    def test_wangsanro_biweekly_schedule_is_preserved_before_july_override(self):
+        june_first_monday = self.sms.get_route(date(2026, 6, 1))
+        june_second_monday = self.sms.get_route(date(2026, 6, 8))
 
-        self.assertIn("왕산로 200, 1004호", july_last_thursday)
-        self.assertIn("청량리는 다음 일정 8/10(월)", august_body)
+        self.assertIn("왕산로 200, 1004호", june_first_monday)
+        self.assertNotIn("왕산로 200, 1004호", june_second_monday)
 
     def test_itaewon_is_added_after_jangchung_from_august(self):
         route = self.sms.get_route(date(2026, 8, 3))
@@ -110,6 +114,7 @@ class SendRouteSmsTests(unittest.TestCase):
             "봉은사로37길 8",
             "가락로28길 3-10",
             "능동로 165-1",
+            "왕산로 200, 1004호",
             "회기로 189",
             "고산자로 508-3",
             "장충단로 225",
