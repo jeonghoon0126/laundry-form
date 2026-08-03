@@ -107,12 +107,14 @@ class SendRouteSmsTests(unittest.TestCase):
         self.assertIn("왕산로 200, 1004호", june_first_monday)
         self.assertNotIn("왕산로 200, 1004호", june_second_monday)
 
-    def test_itaewon_route_starts_on_2026_07_30(self):
+    def test_itaewon_route_starts_on_2026_08_03(self):
         july_23_route = self.sms.get_route(date(2026, 7, 23))
         july_30_route = self.sms.get_route(date(2026, 7, 30))
+        august_3_route = self.sms.get_route(date(2026, 8, 3))
 
         self.assertNotIn("회나무로 50", july_23_route)
-        self.assertIn("회나무로 50", july_30_route)
+        self.assertNotIn("회나무로 50", july_30_route)
+        self.assertIn("회나무로 50", august_3_route)
 
     def test_itaewon_is_added_after_jangchung_from_august(self):
         route = self.sms.get_route(date(2026, 8, 3))
@@ -135,7 +137,21 @@ class SendRouteSmsTests(unittest.TestCase):
 
         self.assertIn("이태원 | 이태원 숙소", body)
         self.assertIn("서울특별시 용산구 회나무로 50 (이태원동)", body)
-        self.assertIn("5층 엘리베이터 진입 후 반층 위 렉 설치 예정", body)
+        self.assertIn("5층 엘베 내려 반층위 옥상문앞", body)
+        self.assertIn("공동현관 비밀번호: [🗝️열쇠] + 3571 + [🔔종]", body)
+        self.assertNotIn("렉 설치 예정", body)
+
+    def test_itaewon_is_present_twice_weekly_from_august_3(self):
+        for route_date in [
+            date(2026, 8, 3),
+            date(2026, 8, 6),
+            date(2026, 8, 10),
+            date(2026, 8, 13),
+        ]:
+            with self.subTest(route_date=route_date):
+                self.assertIn("회나무로 50", self.sms.get_route(route_date))
+
+        self.assertEqual(self.sms.get_route(date(2026, 8, 4)), [])
 
     def test_owner_sms_failure_does_not_retry_driver_sms(self):
         calls = []
