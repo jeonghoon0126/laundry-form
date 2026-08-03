@@ -39,8 +39,6 @@
 - `scripts/dispatch_route_sms.py`는 필요할 때 수동으로 GitHub `workflow_dispatch`를 깨우는 보조 도구로만 둔다.
 - 오너 확인 문자는 `OWNER_PHONE` 비밀값 번호로 전체 동선 본문이 발송된다.
 
-- 같은 날 이미 발송된 문자를 승인된 수정본으로 1회 보정할 때만 `manual_resend=true`를 함께 사용한다. 기본값은 `false`로 유지한다.
-
 ## 테스트
 
 - `DRY_RUN=true`는 실제 발송 없이 메시지만 확인한다.
