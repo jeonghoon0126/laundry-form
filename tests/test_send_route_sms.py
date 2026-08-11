@@ -1,4 +1,6 @@
 import importlib.util
+import io
+from contextlib import redirect_stdout
 from datetime import date
 from pathlib import Path
 import unittest
@@ -73,6 +75,65 @@ class SendRouteSmsTests(unittest.TestCase):
             "능동로 165-1",
             "가락로28길 3-10",
         ])
+
+    def test_wednesday_route_contains_only_jangchung(self):
+        self.assertEqual(self.sms.get_route(date(2026, 8, 5)), [])
+        self.assertEqual(
+            self.sms.get_route(date(2026, 8, 12)),
+            ["장충단로 225"],
+        )
+
+    def test_wednesday_message_contains_no_other_route_notes(self):
+        route_date = date(2026, 8, 12)
+        subject, body = self.sms.build_message(route_date, self.sms.get_route(route_date))
+
+        self.assertEqual(subject, "8/12(수) 동선")
+        self.assertIn("① 장충동 | 메종드브릭", body)
+        self.assertIn("장충단로 225", body)
+        self.assertNotIn("청량리", body)
+        self.assertNotIn("↓", body)
+
+    def test_workflow_schedules_each_monday_wednesday_and_thursday_slot(self):
+        workflow_path = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "send-route-sms.yml"
+        workflow = workflow_path.read_text(encoding="utf-8")
+
+        self.assertEqual(workflow.count("* * 1,3,4"), 4)
+        self.assertNotIn("* * 1,4", workflow)
+
+    def test_main_previews_wednesday_without_sending_in_dry_run(self):
+        old_env = dict(self.sms.os.environ)
+        try:
+            self.sms.os.environ.update({
+                "TEST_DATE": "2026-08-12",
+                "DRY_RUN": "true",
+            })
+            self.sms.send_sms = lambda *_args: self.fail("dry-run must not send SMS")
+            output = io.StringIO()
+
+            with redirect_stdout(output):
+                self.sms.main()
+        finally:
+            self.sms.os.environ.clear()
+            self.sms.os.environ.update(old_env)
+
+        self.assertIn("8/12(수) 동선", output.getvalue())
+        self.assertIn("① 장충동 | 메종드브릭", output.getvalue())
+        self.assertIn("[DRY_RUN] 실제 발송 안 함", output.getvalue())
+
+    def test_main_skips_days_outside_monday_wednesday_and_thursday(self):
+        old_env = dict(self.sms.os.environ)
+        try:
+            self.sms.os.environ["TEST_DATE"] = "2026-08-14"
+            self.sms.send_sms = lambda *_args: self.fail("Friday must not send SMS")
+            output = io.StringIO()
+
+            with redirect_stdout(output):
+                self.sms.main()
+        finally:
+            self.sms.os.environ.clear()
+            self.sms.os.environ.update(old_env)
+
+        self.assertIn("[SKIP] 금요일은 발송 대상 아님", output.getvalue())
 
     def test_gangnam_message_includes_eonju_access_detail(self):
         subject, body = self.sms.build_message(date(2026, 5, 28), self.sms.get_route(date(2026, 5, 28)))
