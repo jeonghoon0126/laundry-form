@@ -16,6 +16,9 @@ class DispatchRouteSmsTests(unittest.TestCase):
     def setUp(self):
         self.dispatcher = load_dispatch_route_sms()
 
+    def test_target_weekdays_include_saturday_and_exclude_wednesday(self):
+        self.assertEqual(self.dispatcher.TARGET_WEEKDAYS, {0, 3, 5})
+
     def test_find_successful_send_run_ignores_dry_run_success(self):
         runs = [
             {

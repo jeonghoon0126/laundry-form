@@ -1,7 +1,7 @@
 """
 캐리 세탁물 수거 동선 문자 자동 발송
-- 고정 스케줄 기반 (월요일/수요일/목요일)
-- 2026-08-12부터 매주 수요일: 장충단로 225만 수거·배송
+- 고정 스케줄 기반 (월요일/목요일/토요일)
+- 2026-08-22부터 매주 토요일: 장충단로 225만 수거·배송
 - 2026-04-09(목): 청량리 1회 추가
 - 2026-04-06(월) 기준: 2주 간격 월요일 청량리 추가
 - 2026-07-01부터: 청량리 월·목 계속 추가
@@ -114,7 +114,7 @@ JANGHANPYEONG_KEY = "장한로26나길 21"
 STAYMOMENT_KEY = "신림동1길 19-5"
 GANGNAM_KEY = "봉은사로37길 8"
 JANGCHUNG_KEY = "장충단로 225"
-WEDNESDAY_ROUTE_START_DATE = date(2026, 8, 12)
+SATURDAY_ROUTE_START_DATE = date(2026, 8, 22)
 WANGSANRO_ONE_OFF_DATE = date(2026, 4, 9)
 WANGSANRO_BIWEEKLY_ANCHOR = date(2026, 4, 6)
 WANGSANRO_DUAL_ROUTE_START = date(2026, 7, 1)
@@ -192,11 +192,11 @@ def get_route(today: date) -> list[str]:
     """오늘 일정에 따라 방문 순서대로 location key 반환"""
     weekday = today.weekday()
 
-    if weekday == 2:
-        return [JANGCHUNG_KEY] if today >= WEDNESDAY_ROUTE_START_DATE else []
+    if weekday == 5:
+        return [JANGCHUNG_KEY] if today >= SATURDAY_ROUTE_START_DATE else []
 
     if weekday not in (0, 3):
-        return []  # 월·수·목 외 발송 안 함
+        return []  # 월·목·토 외 발송 안 함
 
     if today >= GANGNAM_ROUTE_START_DATE:
         return _bupyeong_roundtrip_route(today)
@@ -221,7 +221,7 @@ def _next_thursday(today: date) -> date:
 
 def get_next_notes(today: date, route: list[str]) -> list[str]:
     """오늘 동선에 없는 조건부 숙소 다음 일정 안내 문구 생성"""
-    if today.weekday() == 2:
+    if today.weekday() == 5:
         return []
 
     notes = []
