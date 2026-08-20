@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 KST = ZoneInfo("Asia/Seoul")
 REPO = "jeonghoon0126/laundry-form"
 WORKFLOW = "send-route-sms.yml"
-TARGET_WEEKDAYS = {0, 3}  # Monday, Thursday
+TARGET_WEEKDAYS = {0, 3, 5}  # Monday, Thursday, Saturday
 DEFAULT_GH = Path.home() / ".local/bin/gh"
 DRY_RUN_MARKER = "dry-run"
 
