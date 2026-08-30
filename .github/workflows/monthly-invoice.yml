@@ -2,9 +2,10 @@ name: Monthly Invoice Generation
 
 on:
   schedule:
-    # 매월 28-31일 09시 (KST) = UTC 00:00
-    # 스크립트에서 말일인지 체크
-    - cron: '0 0 28-31 * *'
+    # 매월 말일 09시 (KST) = UTC 00:00.
+    # 말일이 월요일이면 전날 일요일에 같은 정산을 실행한다.
+    # 2월 말일이 월요일인 경우의 전날(27일)까지 포함한다.
+    - cron: '0 0 27-31 * *'
   workflow_dispatch:
     inputs:
       year:
@@ -22,18 +23,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check if last day of month
+      - name: Check settlement run day
         id: check_day
         run: |
-          # 오늘이 말일인지 체크
-          today=$(date +%d)
-          last_day=$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%d)
+          export TZ=Asia/Seoul
+          today=$(date +%F)
+          weekday=$(date +%u)
+          last_date=$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%F)
+          tomorrow=$(date -d "$today + 1 day" +%F)
 
-          if [ "$today" = "$last_day" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "run=true" >> $GITHUB_OUTPUT
+          elif [ "$weekday" = "7" ] && [ "$tomorrow" = "$last_date" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+            echo "year=$(date +%Y)" >> $GITHUB_OUTPUT
+            echo "month=$(date +%m)" >> $GITHUB_OUTPUT
+            echo "말일이 월요일이라 전날 일요일에 정산을 실행합니다."
+          elif [ "$today" = "$last_date" ] && [ "$weekday" != "1" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+            echo "year=$(date +%Y)" >> $GITHUB_OUTPUT
+            echo "month=$(date +%m)" >> $GITHUB_OUTPUT
           else
             echo "run=false" >> $GITHUB_OUTPUT
-            echo "오늘($today)은 말일($last_day)이 아님. 스킵."
+            echo "오늘($today)은 정산 실행일이 아님. 스킵."
           fi
 
       - name: Set up Python
@@ -62,6 +74,8 @@ jobs:
         run: |
           if [ -n "${{ inputs.year }}" ] && [ -n "${{ inputs.month }}" ]; then
             python scripts/generate_invoices.py ${{ inputs.year }} ${{ inputs.month }}
-          else
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             python scripts/generate_invoices.py
+          else
+            python scripts/generate_invoices.py ${{ steps.check_day.outputs.year }} ${{ steps.check_day.outputs.month }}
           fi
