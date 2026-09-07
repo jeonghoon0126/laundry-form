@@ -9,6 +9,7 @@
 - 2026-05-28(목)부터 강남 추가, 부평 출발/복귀 기준 동선 적용
 - 2026-06-01(월)부터 장한평 운영 중지로 동선 제외
 - 2026-08-03(월)부터 이태원 숙소를 월·목 동선에 포함
+- 2026-09-07(월)부터 은평 숙소를 월·목 동선에 포함
 - Solapi API로 기사님께 LMS 발송
 """
 
@@ -97,6 +98,13 @@ LOCATIONS: dict[str, dict] = {
         "access": "7777* / 반지하 라운지자동문 앞",
         "parking": None,
     },
+    "통일로 863-10": {
+        "region": "은평",
+        "name": "은평 숙소",
+        "address": "서울 은평구 통일로 863-10",
+        "access": "엘리베이터 없음 / 1층 세탁물 보관",
+        "parking": None,
+    },
 }
 
 # 기본 동선 (월·목 공통)
@@ -113,6 +121,7 @@ WANGSANRO_KEY = "왕산로 200, 1004호"
 JANGHANPYEONG_KEY = "장한로26나길 21"
 STAYMOMENT_KEY = "신림동1길 19-5"
 GANGNAM_KEY = "봉은사로37길 8"
+EUNPYEONG_KEY = "통일로 863-10"
 JANGCHUNG_KEY = "장충단로 225"
 SATURDAY_ROUTE_START_DATE = date(2026, 8, 22)
 WANGSANRO_ONE_OFF_DATE = date(2026, 4, 9)
@@ -122,6 +131,7 @@ STAYMOMENT_ROUTE_END_DATE = date(2026, 5, 1)
 GANGNAM_ROUTE_START_DATE = date(2026, 5, 28)
 JANGHANPYEONG_ROUTE_END_DATE = date(2026, 6, 1)
 ITAEWON_ROUTE_START_DATE = date(2026, 8, 3)
+EUNPYEONG_ROUTE_START_DATE = date(2026, 9, 7)
 
 
 def _insert_after(route: list[str], after_key: str, target_key: str) -> list[str]:
@@ -182,6 +192,8 @@ def _bupyeong_roundtrip_route(today: date) -> list[str]:
     if today >= ITAEWON_ROUTE_START_DATE:
         route.append("회나무로 50")
     route.append("연희로4길 25-7")
+    if today >= EUNPYEONG_ROUTE_START_DATE:
+        route.append(EUNPYEONG_KEY)
     return route
 
 

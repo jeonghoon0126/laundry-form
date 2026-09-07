@@ -218,6 +218,23 @@ class SendRouteSmsTests(unittest.TestCase):
 
         self.assertEqual(self.sms.get_route(date(2026, 8, 4)), [])
 
+    def test_eunpyeong_is_added_after_yeonnam_from_september_7(self):
+        self.assertNotIn("통일로 863-10", self.sms.get_route(date(2026, 9, 3)))
+
+        for route_date in [date(2026, 9, 7), date(2026, 9, 10)]:
+            with self.subTest(route_date=route_date):
+                route = self.sms.get_route(route_date)
+                self.assertEqual(route[-2:], ["연희로4길 25-7", "통일로 863-10"])
+
+    def test_eunpyeong_message_includes_ground_floor_storage_and_no_elevator(self):
+        route = self.sms.get_route(date(2026, 9, 7))
+        _, body = self.sms.build_message(date(2026, 9, 7), route)
+
+        self.assertIn("은평 | 은평 숙소", body)
+        self.assertIn("서울 은평구 통일로 863-10", body)
+        self.assertIn("엘리베이터 없음", body)
+        self.assertIn("1층 세탁물 보관", body)
+
     def test_owner_sms_failure_does_not_retry_driver_sms(self):
         calls = []
 

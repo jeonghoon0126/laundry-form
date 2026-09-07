@@ -260,6 +260,35 @@ class ProfitSummaryTests(unittest.TestCase):
         self.assertTrue(self.gi.is_settlement_location_active(location, self.gi.date(2026, 5, 31)))
         self.assertFalse(self.gi.is_settlement_location_active(location, self.gi.date(2026, 6, 1)))
 
+    def test_eunpyeong_location_uses_kops_default_prices_and_invoice_template(self):
+        location = "은평구 통일로 863-10"
+        reg_no, name, owner = self.gi.BUSINESS_MAP[location]
+
+        self.assertEqual(reg_no, self.gi.KOPS_REG_NO)
+        self.assertEqual(name, "주식회사 콥스")
+        self.assertEqual(owner, "남택호")
+        self.assertEqual(self.gi.get_location_prices(location), self.gi.PRICES)
+        self.assertEqual(
+            self.gi.INVOICE_SHEET_TEMPLATE_MAP[location],
+            self.gi.INVOICE_SHEET_MAP["송파구 가락로28길 3-10"],
+        )
+
+    def test_eunpyeong_settlement_starts_on_september_7(self):
+        location = "은평구 통일로 863-10"
+
+        self.assertFalse(self.gi.is_settlement_location_active(location, self.gi.date(2026, 9, 6)))
+        self.assertTrue(self.gi.is_settlement_location_active(location, self.gi.date(2026, 9, 7)))
+
+    def test_eunpyeong_record_is_included_in_kops_aggregate_from_start_date(self):
+        location = "은평구 통일로 863-10"
+        rows = [(
+            self.gi.date(2026, 9, 7), location, 1, 2, 3, 4, 5, 6, 7
+        )]
+
+        business_data = self.gi.aggregate_by_business(rows)
+
+        self.assertIn(location, business_data[self.gi.KOPS_REG_NO]["locations"])
+
     def test_itaewon_location_uses_kops_and_starts_on_2026_08_01(self):
         location = "서울특별시 용산구 회나무로 50 (이태원동)"
         reg_no, name, owner = self.gi.BUSINESS_MAP[location]
