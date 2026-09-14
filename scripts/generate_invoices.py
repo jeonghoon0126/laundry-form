@@ -18,6 +18,7 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from io import BytesIO
+from typing import Optional
 
 import psycopg2
 from reportlab.lib import colors
@@ -128,17 +129,27 @@ SHEETS_FIXED_COSTS = {
     'hourly_wage': 12000,          # D열: 시급
     'labor_hours_baseline': 190,   # 인건비 산정 기준 시간
     'labor_revenue_baseline': 7457500, # 인건비 비율 기준 매출
-    'logistics_count': 9,          # F열: 물류 횟수
-    'logistics_cost_per': 120000,  # G열: 물류 1회 비용
+    'logistics_count': 2,          # F열: 월 물류 횟수
+    'logistics_cost_per': 540000,  # G열: 물류 1회 비용
     'rent_utility': 770000,        # I열: 월세+관리비
     'electricity': 250000,         # J열: 전기세
-    'water': 100000,               # K열: 수도세
+    'water': 130000,               # K열: 수도세
     'insurance': 60000,            # L열: 보험
     'supplies_reference_cost': 480000, # 2026-05 실제 소모품 지출
     'supplies_rate': 480000 / 7457500, # M열: 2026-05 매출 대비 소모품률
     'withholding_national_rate': 0.03,
     'withholding_local_rate': 0.003,
     'vat_inclusive_divisor': 11,
+}
+
+# 실제 이체액과 기존 보수 reserve가 확인된 월은 모델 추정값보다 우선한다.
+# 부가세·종소세는 신고 확정세액이 아니라 현금 보관용 reserve다.
+MONTHLY_SETTLEMENT_OVERRIDES = {
+    (2026, 8): {
+        'supplies_cost': 553_179,
+        'vat': 623_751,
+        'income_tax_reserve': 361_135,
+    },
 }
 
 INCOME_TAX_BRACKETS = [
@@ -335,12 +346,24 @@ def calculate_labor_cost(total_amount: int) -> int:
     return round(total_amount * baseline_labor_cost / FC['labor_revenue_baseline'])
 
 
-def calculate_profit_summary(total_amount: int) -> dict:
+def get_settlement_overrides(year: Optional[int], month: Optional[int]) -> dict:
+    """정산월별 실제 비용·reserve override 반환"""
+    if year is None or month is None:
+        return {}
+    return dict(MONTHLY_SETTLEMENT_OVERRIDES.get((year, month), {}))
+
+
+def calculate_profit_summary(
+    total_amount: int,
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+) -> dict:
     """정산 매출 기준 영업이익 요약 계산"""
     FC = SHEETS_FIXED_COSTS
+    overrides = get_settlement_overrides(year, month)
     labor_cost = calculate_labor_cost(total_amount)
     logistics_cost = FC['logistics_count'] * FC['logistics_cost_per']
-    supplies_cost = calculate_supplies_cost(total_amount)
+    supplies_cost = overrides.get('supplies_cost', calculate_supplies_cost(total_amount))
     withholding_national_tax = round(
         (logistics_cost + labor_cost) * FC['withholding_national_rate']
     )
@@ -356,7 +379,7 @@ def calculate_profit_summary(total_amount: int) -> dict:
         FC['insurance'],
         supplies_cost,
     )
-    vat = max(0, output_vat - input_vat_credit)
+    vat = overrides.get('vat', max(0, output_vat - input_vat_credit))
     pre_vat_cost = (
         labor_cost
         + logistics_cost
@@ -410,9 +433,12 @@ def calculate_monthly_close_summary(
     payroll_to_pay: int = 0,
     owner_draw: int = 0,
     income_tax_reserve_rate=None,
+    year: Optional[int] = None,
+    month: Optional[int] = None,
 ) -> dict:
     """발생 손익과 입금/지급 기준 현금 마감을 분리해 계산"""
-    profit_summary = calculate_profit_summary(total_amount)
+    overrides = get_settlement_overrides(year, month)
+    profit_summary = calculate_profit_summary(total_amount, year=year, month=month)
     operating_profit = profit_summary['operating_profit']
     if income_tax_reserve_rate is not None:
         income_tax_reserve_detail = {
@@ -424,6 +450,18 @@ def calculate_monthly_close_summary(
             'annual_income_tax_total': round(operating_profit * income_tax_reserve_rate * 12),
             'monthly_income_tax_reserve': round(operating_profit * income_tax_reserve_rate),
             'income_tax_effective_rate': income_tax_reserve_rate if operating_profit > 0 else 0,
+        }
+    elif 'income_tax_reserve' in overrides:
+        model_detail = calculate_monthly_income_tax_reserve(operating_profit)
+        income_tax_reserve_detail = {
+            **model_detail,
+            'calculated_monthly_income_tax_reserve': model_detail['monthly_income_tax_reserve'],
+            'monthly_income_tax_reserve': overrides['income_tax_reserve'],
+            'income_tax_effective_rate': (
+                overrides['income_tax_reserve'] / operating_profit
+                if operating_profit > 0 else 0
+            ),
+            'is_override': True,
         }
     else:
         income_tax_reserve_detail = calculate_monthly_income_tax_reserve(operating_profit)
@@ -549,7 +587,14 @@ def format_profit_summary_text(summary: dict, close_summary: dict = None) -> str
     income_tax_note = ""
     if close_summary:
         detail = close_summary['income_tax_reserve_detail']
-        income_tax_note = f"""
+        if detail.get('is_override'):
+            income_tax_note = f"""
+종소세 적립 기준
+- 월 영업이익을 12개월로 환산한 법정세액 참고 과세표준: {format_won(detail['annual_tax_base'])}
+- 법정 계산 기준 월 적립액(참고): {format_won(detail['calculated_monthly_income_tax_reserve'])}
+- 이번 월 적용 적립액(승인값, 신고 확정세액 아님): {format_won(close_summary['income_tax_reserve'])}"""
+        else:
+            income_tax_note = f"""
 종소세 적립 기준
 - 월 영업이익을 12개월로 환산한 예상 과세표준: {format_won(detail['annual_tax_base'])}
 - 적용 세율: {detail['income_tax_rate']:.0%}, 누진공제: {format_won(detail['progressive_deduction'])}
@@ -1360,10 +1405,16 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
     {''.join(trend_rows)}
   </table>
 </div>"""
-    profit_summary = calculate_profit_summary(grand_total)
+    profit_summary = calculate_profit_summary(
+        grand_total,
+        year=year,
+        month=month,
+    )
     monthly_close_summary = calculate_monthly_close_summary(
         grand_total,
         kops_receivable_amount=calculate_kops_receivable_amount(business_data),
+        year=year,
+        month=month,
     )
     profit_summary_html = format_profit_summary_html(profit_summary, monthly_close_summary)
     monthly_close_html = format_monthly_close_html(monthly_close_summary)
@@ -1767,7 +1818,11 @@ def update_profit_sheet(year: int, month: int, total_amount: int) -> bool:
             target_row = len(rows) + 1
 
         FC = SHEETS_FIXED_COSTS
-        profit_summary = calculate_profit_summary(total_amount)
+        profit_summary = calculate_profit_summary(
+            total_amount,
+            year=year,
+            month=month,
+        )
 
         data = [
             {'range': f'영업이익계산!A{target_row}', 'values': [[month_str]]},
@@ -1947,10 +2002,16 @@ def main():
     total_amount = calculate_total_amount_from_business_data(business_data)
 
     # 이메일 발송
-    profit_summary = calculate_profit_summary(total_amount)
+    profit_summary = calculate_profit_summary(
+        total_amount,
+        year=year,
+        month=month,
+    )
     monthly_close_summary = calculate_monthly_close_summary(
         total_amount,
         kops_receivable_amount=calculate_kops_receivable_amount(business_data),
+        year=year,
+        month=month,
     )
     subject = f"[캐리] {year}년 {month}월 거래명세서"
     body = f"""{year}년 {month}월 세탁물 정산 내역입니다.
