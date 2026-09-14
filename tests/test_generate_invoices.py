@@ -26,18 +26,18 @@ class ProfitSummaryTests(unittest.TestCase):
         self.assertEqual(summary["logistics_cost"], 1_080_000)
         self.assertEqual(summary["rent_utility"], 770_000)
         self.assertEqual(summary["electricity"], 250_000)
-        self.assertEqual(summary["water"], 100_000)
+        self.assertEqual(summary["water"], 130_000)
         self.assertEqual(summary["insurance"], 60_000)
         self.assertEqual(summary["supplies_cost"], 447_251)
         self.assertEqual(summary["withholding_tax"], 105_746)
         self.assertEqual(summary["withholding_national_tax"], 96_133)
         self.assertEqual(summary["withholding_local_tax"], 9_613)
         self.assertEqual(summary["output_vat"], 631_700)
-        self.assertEqual(summary["input_vat_credit"], 147_934)
-        self.assertEqual(summary["vat"], 483_766)
-        self.assertEqual(summary["total_cost"], 5_421_206)
-        self.assertEqual(summary["operating_profit"], 1_527_494)
-        self.assertAlmostEqual(summary["operating_margin"], 0.2198, places=4)
+        self.assertEqual(summary["input_vat_credit"], 150_662)
+        self.assertEqual(summary["vat"], 481_038)
+        self.assertEqual(summary["total_cost"], 5_448_478)
+        self.assertEqual(summary["operating_profit"], 1_500_222)
+        self.assertAlmostEqual(summary["operating_margin"], 0.2159, places=4)
 
     def test_profit_summary_text_is_ready_for_email(self):
         summary = self.gi.calculate_profit_summary(6_948_700)
@@ -47,20 +47,20 @@ class ProfitSummaryTests(unittest.TestCase):
         self.assertIn("수입", text)
         self.assertIn("정산 매출: 6,948,700원", text)
         self.assertIn("지출", text)
-        self.assertIn("운영비 합계: 4,831,694원", text)
-        self.assertIn("세금/적립 합계: 726,048원", text)
-        self.assertIn("영업이익률: 22.0%", text)
+        self.assertIn("운영비 합계: 4,861,694원", text)
+        self.assertIn("세금/적립 합계: 718,821원", text)
+        self.assertIn("영업이익률: 21.6%", text)
         self.assertIn("인건비: 2,124,443원", text)
         self.assertIn("매입세액공제 항목", text)
         self.assertIn("월세+관리비 매입세액: 70,000원", text)
         self.assertIn("소모품 매입세액: 40,660원", text)
         self.assertIn("부가세 계산", text)
         self.assertIn("매출 부가세: 631,700원", text)
-        self.assertIn("매입세액공제: 147,934원", text)
-        self.assertIn("납부 예상 부가세: 483,766원", text)
+        self.assertIn("매입세액공제: 150,662원", text)
+        self.assertIn("납부 예상 부가세: 481,038원", text)
         self.assertIn("종소세 적립 기준", text)
-        self.assertIn("월 적립액: 136,536원", text)
-        self.assertIn("종소세 적립 후 순수익: 1,390,958원", text)
+        self.assertIn("월 적립액: 132,037원", text)
+        self.assertIn("종소세 적립 후 순수익: 1,368,185원", text)
 
     def test_profit_summary_html_groups_email_breakdown_sections(self):
         summary = self.gi.calculate_profit_summary(7_457_500)
@@ -100,7 +100,7 @@ class ProfitSummaryTests(unittest.TestCase):
         self.assertIn("콥스 입금 후 현금: 2,879,500원", text)
         self.assertIn("인건비 지급 후 현금: 599,500원", text)
         self.assertIn("이미 빼간 영업이익: 1,000,000원", text)
-        self.assertIn("추가로 남길 수 있는 이익: 619,618원", text)
+        self.assertIn("추가로 남길 수 있는 이익: 595,074원", text)
 
     def test_monthly_close_html_shows_cash_itemized_when_inputs_exist(self):
         close = self.gi.calculate_monthly_close_summary(
@@ -131,11 +131,41 @@ class ProfitSummaryTests(unittest.TestCase):
         self.assertEqual(summary["withholding_national_tax"], 100_800)
         self.assertEqual(summary["withholding_local_tax"], 10_080)
         self.assertEqual(summary["output_vat"], 677_955)
-        self.assertEqual(summary["input_vat_credit"], 150_911)
-        self.assertEqual(summary["vat"], 527_044)
-        self.assertEqual(summary["total_cost"], 5_657_924)
-        self.assertEqual(summary["operating_profit"], 1_799_576)
-        self.assertAlmostEqual(summary["operating_margin"], 0.2413, places=4)
+        self.assertEqual(summary["input_vat_credit"], 153_639)
+        self.assertEqual(summary["vat"], 524_316)
+        self.assertEqual(summary["total_cost"], 5_685_196)
+        self.assertEqual(summary["operating_profit"], 1_772_304)
+        self.assertAlmostEqual(summary["operating_margin"], 0.2377, places=4)
+
+    def test_august_2026_uses_confirmed_actuals_and_tax_reserves(self):
+        summary = self.gi.calculate_profit_summary(
+            8_594_450,
+            year=2026,
+            month=8,
+        )
+        close = self.gi.calculate_monthly_close_summary(
+            8_594_450,
+            year=2026,
+            month=8,
+        )
+
+        self.assertEqual(self.gi.SHEETS_FIXED_COSTS["logistics_count"], 2)
+        self.assertEqual(self.gi.SHEETS_FIXED_COSTS["logistics_cost_per"], 540_000)
+        self.assertEqual(summary["labor_cost"], 2_627_603)
+        self.assertEqual(summary["logistics_cost"], 1_080_000)
+        self.assertEqual(summary["water"], 130_000)
+        self.assertEqual(summary["supplies_cost"], 553_179)
+        self.assertEqual(summary["withholding_tax"], 122_351)
+        self.assertEqual(summary["vat"], 623_751)
+        self.assertEqual(summary["total_cost"], 6_216_884)
+        self.assertEqual(summary["operating_profit"], 2_377_566)
+        self.assertEqual(close["income_tax_reserve"], 361_135)
+        self.assertEqual(close["net_profit_after_income_tax_reserve"], 2_016_431)
+        self.assertTrue(close["income_tax_reserve_detail"]["is_override"])
+        self.assertIn(
+            "이번 월 적용 적립액(승인값, 신고 확정세액 아님): 361,135원",
+            self.gi.format_profit_summary_text(summary, close),
+        )
 
     def test_monthly_close_separates_profit_from_cash_timing(self):
         close = self.gi.calculate_monthly_close_summary(
@@ -148,10 +178,10 @@ class ProfitSummaryTests(unittest.TestCase):
             income_tax_reserve_rate=0.10,
         )
 
-        self.assertEqual(close["profit_summary"]["operating_profit"], 1_799_576)
-        self.assertEqual(close["income_tax_reserve"], 179_958)
-        self.assertEqual(close["net_profit_after_income_tax_reserve"], 1_619_618)
-        self.assertEqual(close["remaining_profit_after_owner_draw"], 619_618)
+        self.assertEqual(close["profit_summary"]["operating_profit"], 1_772_304)
+        self.assertEqual(close["income_tax_reserve"], 177_230)
+        self.assertEqual(close["net_profit_after_income_tax_reserve"], 1_595_074)
+        self.assertEqual(close["remaining_profit_after_owner_draw"], 595_074)
         self.assertEqual(close["cash_timing"]["month_end_collection"], 5_048_000)
         self.assertEqual(close["cash_timing"]["delayed_kops_collection"], 2_409_500)
         self.assertEqual(close["cash_timing"]["cash_after_late_receipt"], 2_879_500)
@@ -164,15 +194,15 @@ class ProfitSummaryTests(unittest.TestCase):
     def test_monthly_close_uses_annualized_monthly_profit_for_income_tax_reserve(self):
         close = self.gi.calculate_monthly_close_summary(8_723_000)
 
-        self.assertEqual(close["profit_summary"]["operating_profit"], 2_476_310)
-        self.assertEqual(close["income_tax_reserve_detail"]["annual_tax_base"], 29_715_720)
+        self.assertEqual(close["profit_summary"]["operating_profit"], 2_449_038)
+        self.assertEqual(close["income_tax_reserve_detail"]["annual_tax_base"], 29_388_456)
         self.assertEqual(close["income_tax_reserve_detail"]["income_tax_rate"], 0.15)
         self.assertEqual(close["income_tax_reserve_detail"]["progressive_deduction"], 1_260_000)
-        self.assertEqual(close["income_tax_reserve_detail"]["annual_income_tax"], 3_197_358)
-        self.assertEqual(close["income_tax_reserve_detail"]["annual_local_income_tax"], 319_736)
-        self.assertEqual(close["income_tax_reserve_detail"]["annual_income_tax_total"], 3_517_094)
-        self.assertEqual(close["income_tax_reserve"], 293_091)
-        self.assertEqual(close["net_profit_after_income_tax_reserve"], 2_183_219)
+        self.assertEqual(close["income_tax_reserve_detail"]["annual_income_tax"], 3_148_268)
+        self.assertEqual(close["income_tax_reserve_detail"]["annual_local_income_tax"], 314_827)
+        self.assertEqual(close["income_tax_reserve_detail"]["annual_income_tax_total"], 3_463_095)
+        self.assertEqual(close["income_tax_reserve"], 288_591)
+        self.assertEqual(close["net_profit_after_income_tax_reserve"], 2_160_447)
 
     def test_business_totals_find_kops_receivable_for_monthly_close(self):
         business_data = {
@@ -240,11 +270,39 @@ class ProfitSummaryTests(unittest.TestCase):
         }
         self.assertEqual(values_by_range["영업이익계산!E7"], 2_124_443)
         self.assertEqual(values_by_range["영업이익계산!N7"], 105_746)
-        self.assertEqual(values_by_range["영업이익계산!O7"], 483_766)
-        self.assertEqual(values_by_range["영업이익계산!P7"], 5_421_206)
-        self.assertEqual(values_by_range["영업이익계산!Q7"], 1_527_494)
-        self.assertAlmostEqual(values_by_range["영업이익계산!R7"], 0.2198, places=4)
+        self.assertEqual(values_by_range["영업이익계산!O7"], 481_038)
+        self.assertEqual(values_by_range["영업이익계산!P7"], 5_448_478)
+        self.assertEqual(values_by_range["영업이익계산!Q7"], 1_500_222)
+        self.assertAlmostEqual(values_by_range["영업이익계산!R7"], 0.2159, places=4)
         self.assertEqual(captured["formatted_row"], 7)
+
+    def test_profit_sheet_update_applies_august_settlement_overrides(self):
+        captured = {}
+
+        self.gi.get_sheets_token = lambda: "token"
+        self.gi._sheets_get = lambda spreadsheet_id, token, range_str: [
+            ["정산월"],
+            [],
+            ["2026-8"],
+        ]
+
+        def fake_batch_update(spreadsheet_id, token, data):
+            captured["data"] = data
+
+        self.gi._sheets_batch_update = fake_batch_update
+        self.gi.format_profit_sheet_row = lambda token, target_row: captured.setdefault("formatted_row", target_row)
+
+        self.assertTrue(self.gi.update_profit_sheet(2026, 8, 8_594_450))
+
+        values_by_range = {
+            item["range"]: item["values"][0][0]
+            for item in captured["data"]
+        }
+        self.assertEqual(values_by_range["영업이익계산!M3"], 553_179)
+        self.assertEqual(values_by_range["영업이익계산!O3"], 623_751)
+        self.assertEqual(values_by_range["영업이익계산!P3"], 6_216_884)
+        self.assertEqual(values_by_range["영업이익계산!Q3"], 2_377_566)
+        self.assertEqual(captured["formatted_row"], 3)
 
     def test_gangnam_location_uses_kops_business_and_default_prices(self):
         reg_no, name, owner = self.gi.BUSINESS_MAP["강남구 봉은사로37길 8"]
