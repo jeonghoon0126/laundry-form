@@ -102,7 +102,7 @@ LOCATIONS: dict[str, dict] = {
         "region": "은평",
         "name": "은평 숙소",
         "address": "서울 은평구 통일로 863-10",
-        "access": "엘리베이터 없음 / 1층 세탁물 보관",
+        "access": "정문현관 - 5052* / 엘리베이터 없음 / 1층 세탁물 보관",
         "parking": None,
     },
 }
