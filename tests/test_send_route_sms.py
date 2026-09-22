@@ -232,6 +232,7 @@ class SendRouteSmsTests(unittest.TestCase):
 
         self.assertIn("은평 | 은평 숙소", body)
         self.assertIn("서울 은평구 통일로 863-10", body)
+        self.assertTrue("정문현관 - 5052*" in body, "은평 정문 출입안내 누락")
         self.assertIn("엘리베이터 없음", body)
         self.assertIn("1층 세탁물 보관", body)
 
