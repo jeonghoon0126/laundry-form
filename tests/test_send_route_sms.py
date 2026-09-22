@@ -123,14 +123,45 @@ class SendRouteSmsTests(unittest.TestCase):
             "연희로4길 25-7",
         ])
 
-    def test_itaewon_message_includes_address_and_elevator_note(self):
+    def test_itaewon_is_present_on_each_monday_and_thursday_from_august_3(self):
+        for route_date in [
+            date(2026, 8, 3),
+            date(2026, 8, 6),
+            date(2026, 8, 10),
+            date(2026, 8, 13),
+        ]:
+            with self.subTest(route_date=route_date):
+                self.assertIn("회나무로 50", self.sms.get_route(route_date))
+
+        self.assertEqual(self.sms.get_route(date(2026, 8, 4)), [])
+
+    def test_itaewon_message_includes_latest_access_instructions(self):
         route = self.sms.get_route(date(2026, 8, 3))
         _, body = self.sms.build_message(date(2026, 8, 3), route)
 
         self.assertIn("이태원 | 이태원 숙소", body)
         self.assertIn("서울특별시 용산구 회나무로 50 (이태원동)", body)
-        self.assertIn("엘리베이터 있음", body)
-        self.assertIn("5층 엘리베이터 진입 후 반층 위 렉 설치 예정", body)
+        self.assertIn("5층 엘베 내려 반층위 옥상문앞", body)
+        self.assertIn("공동현관 비밀번호: [🗝️열쇠] + 3571 + [🔔종]", body)
+        self.assertNotIn("렉 설치 예정", body)
+
+    def test_eunpyeong_is_added_after_yeonnam_from_september_7(self):
+        self.assertNotIn("통일로 863-10", self.sms.get_route(date(2026, 9, 3)))
+
+        for route_date in [date(2026, 9, 7), date(2026, 9, 10)]:
+            with self.subTest(route_date=route_date):
+                route = self.sms.get_route(route_date)
+                self.assertEqual(route[-2:], ["연희로4길 25-7", "통일로 863-10"])
+
+    def test_eunpyeong_message_includes_ground_floor_storage_and_no_elevator(self):
+        route = self.sms.get_route(date(2026, 9, 7))
+        _, body = self.sms.build_message(date(2026, 9, 7), route)
+
+        self.assertIn("은평 | 은평 숙소", body)
+        self.assertIn("서울 은평구 통일로 863-10", body)
+        self.assertIn("정문현관 - 5052*", body)
+        self.assertIn("엘리베이터 없음", body)
+        self.assertIn("1층 세탁물 보관", body)
 
 
 if __name__ == "__main__":

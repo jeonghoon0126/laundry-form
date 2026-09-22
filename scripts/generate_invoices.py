@@ -17,6 +17,7 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from io import BytesIO
+from typing import Optional
 
 import psycopg2
 from reportlab.lib import colors
@@ -62,6 +63,7 @@ BUSINESS_MAP = {
     '강남구 봉은사로37길 8': ('767-87-02214', '주식회사 콥스', '남택호'),
     '서울특별시 용산구 회나무로 50 (이태원동)': ('767-87-02214', '주식회사 콥스', '남택호'),
     '송파구 가락로28길 3-10': ('767-87-02214', '주식회사 콥스', '남택호'),
+    '은평구 통일로 863-10': ('767-87-02214', '주식회사 콥스', '남택호'),
     '동대문구 회기로 189': ('419-11-02853', '오를리(Orly)', '김지혜'),
     '관악구 신림동1길 19-5': ('461-86-03598', '주식회사스테이모먼트', '유경민'),
 }
@@ -98,7 +100,14 @@ JANGHANPYEONG_LOCATION = '동대문구 장한로26나길 21'
 JANGHANPYEONG_SETTLEMENT_END_DATE = date(2026, 6, 1)
 ITAEWON_LOCATION = '서울특별시 용산구 회나무로 50 (이태원동)'
 ITAEWON_SETTLEMENT_START_DATE = date(2026, 8, 1)
+EUNPYEONG_LOCATION = '은평구 통일로 863-10'
+EUNPYEONG_SETTLEMENT_START_DATE = date(2026, 9, 7)
 LAST_DAY_CARRYOVER_START_DATE = date(2026, 4, 30)
+
+# 은평 신규 동선에 따른 기사님 임시수당. 2026년 9월 정산에만 적용한다.
+DRIVER_SALARY_SUPPLEMENT_BY_MONTH = {
+    (2026, 9): 100_000,
+}
 
 ITEM_NAMES = {
     'blanket': '이불',
@@ -123,15 +132,26 @@ SHEETS_FIXED_COSTS = {
     'hourly_wage': 12000,          # D열: 시급
     'labor_hours_baseline': 190,   # 인건비 산정 기준 시간
     'labor_revenue_baseline': 7457500, # 인건비 비율 기준 매출
-    'logistics_count': 9,          # F열: 물류 횟수
-    'logistics_cost_per': 120000,  # G열: 물류 1회 비용
+    'logistics_count': 2,          # F열: 월 물류 횟수
+    'logistics_cost_per': 540000,  # G열: 물류 1회 비용
     'rent_utility': 770000,        # I열: 월세+관리비
     'electricity': 250000,         # J열: 전기세
-    'water': 100000,               # K열: 수도세
+    'water': 130000,               # K열: 수도세
     'insurance': 60000,            # L열: 보험
     'supplies_rate': 0.04,         # M열: 소모품
     'withholding_tax_rate': 0.033, # N열: 원천세
-    'vat_rate_on_net': 0.10,       # 부가세: 부가세 제외 전 이익의 10%
+    'vat_rate_on_net': 0.10,       # 검증값이 없는 월의 임시 부가세 reserve
+    'income_tax_reserve_rate': 0.15, # 검증값이 없는 월의 종소세 계획 적립률
+}
+
+# 실제 이체액과 기존 보수 reserve가 확인된 월은 비율 추정값보다 우선한다.
+# 부가세·종소세는 신고 확정세액이 아니라 현금 보관용 reserve다.
+MONTHLY_SETTLEMENT_OVERRIDES = {
+    (2026, 8): {
+        'supplies_cost': 553_179,
+        'vat': 623_751,
+        'income_tax_reserve': 361_135,
+    },
 }
 
 INVOICE_SHEET_MAP = {
@@ -144,6 +164,7 @@ INVOICE_SHEET_MAP = {
     '강남구 봉은사로37길 8':        'invoice(거래명세서)_강남구 봉은사로37길 8',
     '서울특별시 용산구 회나무로 50 (이태원동)': 'invoice(거래명세서)_이태원 회나무로 50',
     '송파구 가락로28길 3-10':       'invoice(거래명세서)_송파구 가락로28길 3-10 스테이브리즈 송파',
+    '은평구 통일로 863-10':          'invoice(거래명세서)_은평구 통일로 863-10',
     '광진구 능동로 165-1':          'invoice(거래명세서)_능동로 165-1 화양프라하임',
     '동대문구 장한로26나길 21':     'invoice(거래명세서)_가회',
 }
@@ -173,6 +194,8 @@ def is_settlement_location_active(location: str, record_date: date) -> bool:
     if location == JANGHANPYEONG_LOCATION and record_date >= JANGHANPYEONG_SETTLEMENT_END_DATE:
         return False
     if location == ITAEWON_LOCATION and record_date < ITAEWON_SETTLEMENT_START_DATE:
+        return False
+    if location == EUNPYEONG_LOCATION and record_date < EUNPYEONG_SETTLEMENT_START_DATE:
         return False
     return True
 
@@ -226,12 +249,31 @@ def calculate_labor_cost(total_amount: int) -> int:
     return round(total_amount * baseline_labor_cost / FC['labor_revenue_baseline'])
 
 
-def calculate_profit_summary(total_amount: int) -> dict:
+def get_driver_salary_supplement(year: int, month: int) -> int:
+    """정산월별 기사님 임시수당. 미지정 월은 0원."""
+    return DRIVER_SALARY_SUPPLEMENT_BY_MONTH.get((year, month), 0)
+
+
+def get_settlement_overrides(year: Optional[int], month: Optional[int]) -> dict:
+    """정산월별 실제 비용·reserve override 반환"""
+    if year is None or month is None:
+        return {}
+    return dict(MONTHLY_SETTLEMENT_OVERRIDES.get((year, month), {}))
+
+
+def calculate_profit_summary(
+    total_amount: int,
+    driver_salary_supplement: int = 0,
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+) -> dict:
     """정산 매출 기준 영업이익 요약 계산"""
     FC = SHEETS_FIXED_COSTS
-    labor_cost = calculate_labor_cost(total_amount)
+    overrides = get_settlement_overrides(year, month)
+    base_labor_cost = calculate_labor_cost(total_amount)
+    labor_cost = base_labor_cost + driver_salary_supplement
     logistics_cost = FC['logistics_count'] * FC['logistics_cost_per']
-    supplies_cost = calculate_supplies_cost(total_amount)
+    supplies_cost = overrides.get('supplies_cost', calculate_supplies_cost(total_amount))
     withholding_tax = round((logistics_cost + labor_cost) * FC['withholding_tax_rate'])
     pre_vat_cost = (
         labor_cost
@@ -244,12 +286,19 @@ def calculate_profit_summary(total_amount: int) -> dict:
         + withholding_tax
     )
     vat_base = max(0, total_amount - pre_vat_cost)
-    vat = round(vat_base * FC['vat_rate_on_net'])
+    vat = overrides.get('vat', round(vat_base * FC['vat_rate_on_net']))
     total_cost = pre_vat_cost + vat
     operating_profit = total_amount - total_cost
     operating_margin = operating_profit / total_amount if total_amount else 0
+    income_tax_reserve = overrides.get(
+        'income_tax_reserve',
+        round(max(0, operating_profit) * FC['income_tax_reserve_rate']),
+    )
+    available_after_tax_reserves = operating_profit - income_tax_reserve
     return {
         'revenue': total_amount,
+        'base_labor_cost': base_labor_cost,
+        'driver_salary_supplement': driver_salary_supplement,
         'labor_cost': labor_cost,
         'logistics_cost': logistics_cost,
         'rent_utility': FC['rent_utility'],
@@ -258,10 +307,13 @@ def calculate_profit_summary(total_amount: int) -> dict:
         'insurance': FC['insurance'],
         'supplies_cost': supplies_cost,
         'withholding_tax': withholding_tax,
+        'vat_base': vat_base,
         'vat': vat,
         'total_cost': total_cost,
         'operating_profit': operating_profit,
         'operating_margin': operating_margin,
+        'income_tax_reserve': income_tax_reserve,
+        'available_after_tax_reserves': available_after_tax_reserves,
     }
 
 
@@ -272,6 +324,11 @@ def format_won(amount: int) -> str:
 
 def format_profit_summary_text(summary: dict) -> str:
     """메일 본문용 영업이익 요약 텍스트"""
+    supplement = summary.get('driver_salary_supplement', 0)
+    supplement_line = (
+        f"- 기사님 임시수당: {format_won(supplement)} (인건비에 포함)\n"
+        if supplement else ""
+    )
     return f"""영업이익 요약
 - 매출: {format_won(summary['revenue'])}
 - 총 지출: {format_won(summary['total_cost'])}
@@ -280,14 +337,16 @@ def format_profit_summary_text(summary: dict) -> str:
 
 지출 내역
 - 인건비: {format_won(summary['labor_cost'])}
-- 물류비: {format_won(summary['logistics_cost'])}
+{supplement_line}- 물류비: {format_won(summary['logistics_cost'])}
 - 월세+관리비: {format_won(summary['rent_utility'])}
 - 전기세: {format_won(summary['electricity'])}
 - 수도세: {format_won(summary['water'])}
 - 보험: {format_won(summary['insurance'])}
 - 소모품: {format_won(summary['supplies_cost'])}
 - 원천세: {format_won(summary['withholding_tax'])}
-- 부가세: {format_won(summary['vat'])}"""
+- 부가세 보관액: {format_won(summary['vat'])}
+- 종소세 적립액: {format_won(summary['income_tax_reserve'])}
+- 정산 후 남는 돈(건조기 제외): {format_won(summary['available_after_tax_reserves'])}"""
 
 
 def format_profit_summary_html(summary: dict) -> str:
@@ -301,8 +360,12 @@ def format_profit_summary_html(summary: dict) -> str:
         ('보험', summary['insurance']),
         ('소모품', summary['supplies_cost']),
         ('원천세', summary['withholding_tax']),
-        ('부가세', summary['vat']),
+        ('부가세 보관액', summary['vat']),
+        ('종소세 적립액', summary['income_tax_reserve']),
     ]
+    supplement = summary.get('driver_salary_supplement', 0)
+    if supplement:
+        rows.insert(1, ('기사님 임시수당(인건비에 포함)', supplement))
     cost_rows = ''.join(
         f'<tr><td style="padding:4px 0;color:#475569;">{label}</td>'
         f'<td style="padding:4px 0;text-align:right;color:#111827;">{format_won(amount)}</td></tr>'
@@ -332,6 +395,9 @@ def format_profit_summary_html(summary: dict) -> str:
   <table style="border-collapse:collapse;width:100%;">
     {cost_rows}
   </table>
+  <p style="margin:12px 0 0;padding-top:12px;border-top:1px solid #bbf7d0;text-align:right;color:#047857;font-weight:bold;">
+    정산 후 남는 돈(건조기 제외): {format_won(summary['available_after_tax_reserves'])}
+  </p>
 </div>"""
 
 
@@ -939,7 +1005,13 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
     {''.join(trend_rows)}
   </table>
 </div>"""
-    profit_summary = calculate_profit_summary(grand_total)
+    driver_salary_supplement = get_driver_salary_supplement(year, month)
+    profit_summary = calculate_profit_summary(
+        grand_total,
+        driver_salary_supplement,
+        year=year,
+        month=month,
+    )
     profit_summary_html = format_profit_summary_html(profit_summary)
 
     html = f"""<!DOCTYPE html>
@@ -984,19 +1056,27 @@ def send_report_email(year: int, month: int, rows: list, business_data: dict) ->
 # ============================================================
 
 def get_sheets_token() -> str:
-    """서비스 계정 JSON 환경변수 → Google Sheets API access token"""
+    """서비스 계정 설정 → Google Sheets API access token"""
     import json as _json
     key_json = os.environ.get('SHEETS_SERVICE_ACCOUNT', '').strip()
-    if not key_json:
+    key_file = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '').strip()
+    if not key_json and not key_file:
         return ''
     try:
         from google.oauth2 import service_account
         import google.auth.transport.requests
-        key_dict = _json.loads(key_json)
-        creds = service_account.Credentials.from_service_account_info(
-            key_dict,
-            scopes=['https://www.googleapis.com/auth/spreadsheets']
-        )
+        scopes = ['https://www.googleapis.com/auth/spreadsheets']
+        if key_json:
+            key_dict = _json.loads(key_json)
+            creds = service_account.Credentials.from_service_account_info(
+                key_dict,
+                scopes=scopes,
+            )
+        else:
+            creds = service_account.Credentials.from_service_account_file(
+                key_file,
+                scopes=scopes,
+            )
         creds.refresh(google.auth.transport.requests.Request())
         return creds.token
     except ImportError as e:
@@ -1076,7 +1156,12 @@ def format_profit_sheet_row(token: str, target_row: int):
     }])
 
 
-def update_profit_sheet(year: int, month: int, total_amount: int) -> bool:
+def update_profit_sheet(
+    year: int,
+    month: int,
+    total_amount: int,
+    driver_salary_supplement=None,
+) -> bool:
     """캐리_고객 '영업이익계산' 시트 업데이트"""
     token = get_sheets_token()
     if not token:
@@ -1097,7 +1182,14 @@ def update_profit_sheet(year: int, month: int, total_amount: int) -> bool:
             target_row = len(rows) + 1
 
         FC = SHEETS_FIXED_COSTS
-        profit_summary = calculate_profit_summary(total_amount)
+        if driver_salary_supplement is None:
+            driver_salary_supplement = get_driver_salary_supplement(year, month)
+        profit_summary = calculate_profit_summary(
+            total_amount,
+            driver_salary_supplement,
+            year=year,
+            month=month,
+        )
 
         data = [
             {'range': f'영업이익계산!A{target_row}', 'values': [[month_str]]},
@@ -1234,7 +1326,13 @@ def main():
             total_amount += item['amount']
 
     # 이메일 발송
-    profit_summary = calculate_profit_summary(total_amount)
+    driver_salary_supplement = get_driver_salary_supplement(year, month)
+    profit_summary = calculate_profit_summary(
+        total_amount,
+        driver_salary_supplement,
+        year=year,
+        month=month,
+    )
     subject = f"[캐리] {year}년 {month}월 거래명세서"
     body = f"""{year}년 {month}월 세탁물 정산 내역입니다.
 
@@ -1258,7 +1356,12 @@ def main():
     send_email(subject, body, attachments)
 
     # Google Sheets 업데이트
-    update_profit_sheet(year, month, total_amount)
+    update_profit_sheet(
+        year,
+        month,
+        total_amount,
+        driver_salary_supplement=driver_salary_supplement,
+    )
     update_invoice_sheets(year, month, rows)
 
     # 로컬 저장 (iCloud Drive 월별 폴더)
