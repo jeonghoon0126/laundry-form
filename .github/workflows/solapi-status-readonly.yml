@@ -1,0 +1,81 @@
+# Manual account-read diagnostic only. No message sends or billing changes.
+# Explicit operator approval and a reviewed main commit are required for reads.
+name: SOLAPI account status (manual read-only)
+
+'on':
+  workflow_dispatch:
+    inputs:
+      execute_read_only:
+        description: 'After explicit user approval only: read existing SOLAPI account status'
+        type: boolean
+        required: false
+        default: false
+      approved_revision:
+        description: 'Full 40-character reviewed main commit SHA; no credentials or private data'
+        type: string
+        required: false
+        default: ''
+      authorization_ack:
+        description: 'Not a substitute for actual user approval'
+        type: choice
+        options:
+          - NOT_APPROVED
+          - APPROVED_READ_ONLY_SOLAPI_STATUS
+        default: NOT_APPROVED
+        required: false
+
+permissions: {}
+
+concurrency:
+  group: solapi-account-status-readonly
+  cancel-in-progress: false
+
+jobs:
+  dry_run:
+    if: ${{ inputs.execute_read_only != true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      # No checkout, secret references, HTTP commands, artifacts or env access.
+      - name: No-account-access dry run
+        shell: bash
+        run: |
+          set +x
+          python3 -I - <<'PY'
+          import json
+          print(json.dumps({"mode":"dry_run","code":"NO_ACCOUNT_READS_PERFORMED","send_authorized":False,"spending_authorized":False,"send_performed":False,"upload_performed":False,"account_changed":False}, sort_keys=True))
+          PY
+
+  read_only:
+    if: >-
+      ${{ inputs.execute_read_only == true &&
+          inputs.authorization_ack == 'APPROVED_READ_ONLY_SOLAPI_STATUS' &&
+          inputs.approved_revision == github.sha &&
+          github.event_name == 'workflow_dispatch' &&
+          github.repository == 'jeonghoon0126/laundry-form' &&
+          github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout reviewed revision (no persisted token)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+          sparse-checkout: tools/solapi_status_probe
+          sparse-checkout-cone-mode: true
+      - name: Read only the three approved SOLAPI status endpoints
+        # Existing secret NAMES only. No values were read to prepare this draft.
+        env:
+          SOLAPI_API_KEY: ${{ secrets.SOLAPI_API_KEY }}
+          SOLAPI_API_SECRET: ${{ secrets.SOLAPI_API_SECRET }}
+          SOLAPI_STATUS_READ_ACK: ${{ inputs.authorization_ack }}
+          SOLAPI_STATUS_APPROVED_REVISION: ${{ inputs.approved_revision }}
+        shell: bash
+        run: |
+          set +x
+          python3 -I -B tools/solapi_status_probe/probe.py --execute-read-only
