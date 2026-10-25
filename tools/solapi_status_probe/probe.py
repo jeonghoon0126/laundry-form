@@ -43,6 +43,7 @@ class ReadTarget(Enum):
 class SchemaReason(Enum):
     NOT_EVALUATED = "not_evaluated"
     VERIFIED = "verified"
+    LEGACY_ACTIVE_NUMBER_ARRAY = "legacy_active_number_array"
     ROOT_TYPE_UNSUPPORTED = "root_type_unsupported"
     LIST_LIMIT_EXCEEDED = "list_limit_exceeded"
     ITEM_TYPE_UNSUPPORTED = "item_type_unsupported"
@@ -209,7 +210,7 @@ def timestamp_or_null(value) -> bool:
 
 
 def sender_schema_reason(data) -> SchemaReason:
-    """Same conservative acceptance conditions; only fixed, value-free enums.
+    """Strict object-array or official CLI string-array contract; fixed enums.
 
     Never return values, field names supplied by the server, counts, indexes,
     lengths, headers, exceptions, or representations of data.
@@ -219,6 +220,15 @@ def sender_schema_reason(data) -> SchemaReason:
             return SchemaReason.ROOT_TYPE_UNSUPPORTED
         if len(data) > 1000:
             return SchemaReason.LIST_LIMIT_EXCEEDED
+        # Official SOLAPI CLI contract: homogeneous plain string array.
+        # This validates only returned number syntax, never expiry/ownership.
+        # Evidence: solapi/solactl commit 599027469279aa1d06cc9c9b46363bcd3cd49b58.
+        if data and type(data[0]) is str:
+            if any(type(item) is not str for item in data):
+                return SchemaReason.ITEM_TYPE_UNSUPPORTED
+            if any(re.fullmatch(r"[0-9]{8,12}", item) is None for item in data):
+                return SchemaReason.PHONE_FORMAT_UNEXPECTED
+            return SchemaReason.LEGACY_ACTIVE_NUMBER_ARRAY
         for item in data:
             if type(item) is not dict:
                 return SchemaReason.ITEM_TYPE_UNSUPPORTED
@@ -250,7 +260,7 @@ def verifiable_fields(endpoint: Endpoint, data) -> bool:
         return (type(data) is dict and data.get("countryId") == "82"
                 and data.get("serviceMethod") == "MT" and number(data.get("mms")) and data["mms"] > 0)
     if endpoint is Endpoint.SENDERS:
-        return sender_schema_reason(data) is SchemaReason.VERIFIED
+        return sender_schema_reason(data) in (SchemaReason.VERIFIED, SchemaReason.LEGACY_ACTIVE_NUMBER_ARRAY)
     return False
 
 
@@ -276,7 +286,7 @@ def classify(endpoint: Endpoint, response: Response, *, schema_diagnostic=False)
                     if type(reason) is not SchemaReason:
                         reason = SchemaReason.VALIDATION_UNCONFIRMED
                     result["schema_reason"] = reason.value
-                    valid = reason is SchemaReason.VERIFIED
+                    valid = reason in (SchemaReason.VERIFIED, SchemaReason.LEGACY_ACTIVE_NUMBER_ARRAY)
                 else:
                     valid = verifiable_fields(endpoint, data)
             except (TypeError, ValueError, OverflowError, RecursionError):

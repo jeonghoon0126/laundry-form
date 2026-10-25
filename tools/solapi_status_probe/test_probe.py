@@ -451,6 +451,85 @@ class ProbeTests(unittest.TestCase):
         self.assertNotIn('${{', step['run'])
         self.assertIn('*) exit 2', step['run'])
 
+    def test_official_plain_string_array_contract_strictly_accepted(self):
+        for numbers in (['0' * 8], [PRIVATE_PHONE], ['0' * 12], ['0' * 8, PRIVATE_PHONE]):
+            result, mock = self.diagnostic([response(numbers)])
+            check = result['checks']['active_sender_listing']
+            self.assertEqual(check['schema_reason'], 'legacy_active_number_array')
+            self.assertEqual(check['response_fields'], 'verifiable')
+            self.assertEqual(mock.calls, [p.Endpoint.SENDERS])
+            self.assertEqual(result['checks']['balance_and_recharge']['api_read'], 'not_run')
+            self.assertEqual(result['checks']['account_mms_pricing']['api_read'], 'not_run')
+            for key in ('specific_sender_verified', 'budget_verified', 'send_authorized', 'spending_authorized',
+                        'send_performed', 'upload_performed', 'account_changed'):
+                self.assertIs(result[key], False)
+            self.assertEqual(result['approved_account_match'], 'unverified')
+            for number in numbers:
+                self.assertNotIn(number, json.dumps(result))
+
+    def test_plain_string_array_bad_syntax_is_never_normalized(self):
+        for number in ('', '0' * 7, '0' * 13, '+00000000', '000-0000-0000',
+                       ' 00000000', '00000000 ', '00000000\n', '０' * 8, 'A' * 8):
+            result, mock = self.diagnostic([response([number])])
+            check = result['checks']['active_sender_listing']
+            self.assertEqual(check['schema_reason'], 'phone_format_unexpected')
+            self.assertEqual(check['response_fields'], 'unverified')
+            self.assertEqual(mock.calls, [p.Endpoint.SENDERS])
+
+    def test_plain_string_array_rejects_mixed_types_and_numeric_coercion(self):
+        for other in (None, True, False, 0, 10000000, 1.5, {}, [], senders()[0]):
+            cases = ([PRIVATE_PHONE, other], [other, PRIVATE_PHONE])
+            if other != senders()[0]:  # The pre-existing homogeneous valid object array still passes.
+                cases += ([other],)
+            for data in cases:
+                result, mock = self.diagnostic([response(data)])
+                self.assertEqual(result['checks']['active_sender_listing']['response_fields'], 'unverified')
+                self.assertEqual(mock.calls, [p.Endpoint.SENDERS])
+        self.assertEqual(p.sender_schema_reason([PRIVATE_PHONE] * 1001), p.SchemaReason.LIST_LIMIT_EXCEEDED)
+
+    def test_plain_string_contract_does_not_represent_arbitrary_objects(self):
+        class NoRepresentation:
+            def __str__(self): raise AssertionError('coercion forbidden')
+            def __repr__(self): raise AssertionError('representation forbidden')
+        self.assertEqual(p.sender_schema_reason([NoRepresentation()]), p.SchemaReason.ITEM_TYPE_UNSUPPORTED)
+        self.assertEqual(p.sender_schema_reason([PRIVATE_PHONE, NoRepresentation()]), p.SchemaReason.ITEM_TYPE_UNSUPPORTED)
+
+    def test_contract_expansion_is_only_homogeneous_valid_number_strings(self):
+        import itertools
+        def previous(data):
+            return (type(data) is list and len(data) <= 1000 and
+                    all(type(item) is dict and type(item.get('phoneNumber')) is str
+                        and p.re.fullmatch(r'[0-9]{8,12}', item['phoneNumber']) is not None
+                        and item.get('status') == 'ACTIVE'
+                        and ('expireAt' not in item or p.timestamp_or_null(item['expireAt'])) for item in data))
+        pool = (None, False, 0, 10000000, 1.5, '', '0' * 7, '0' * 8, PRIVATE_PHONE,
+                '0' * 12, '0' * 13, '000-0000-0000', {}, [], senders()[0],
+                {**senders()[0], 'expireAt': 'bad'})
+        cases = [[], None, {}, PRIVATE_PHONE] + [[x] for x in pool] + [list(x) for x in itertools.product(pool, repeat=2)]
+        for data in cases:
+            accepted = p.verifiable_fields(p.Endpoint.SENDERS, data)
+            added_contract = (type(data) is list and bool(data) and len(data) <= 1000 and
+                              all(type(x) is str and p.re.fullmatch(r'[0-9]{8,12}', x) is not None for x in data))
+            self.assertEqual(accepted, previous(data) or added_contract)
+
+    def test_empty_and_object_arrays_preserve_previous_classification(self):
+        for data in ([], senders()):
+            result, _ = self.diagnostic([response(data)])
+            self.assertEqual(result['checks']['active_sender_listing']['schema_reason'], 'verified')
+        for data in ([{**senders()[0], 'status': 'INACTIVE'}], [{**senders()[0], 'expireAt': 'bad'}]):
+            result, _ = self.diagnostic([response(data)])
+            self.assertEqual(result['checks']['active_sender_listing']['response_fields'], 'unverified')
+
+    def test_scalar_list_private_values_never_appear_in_public_json(self):
+        for data in ([PRIVATE_PHONE], [PRIVATE_PHONE, SECRET], [SECRET], [KEY], [str(PRIVATE_BALANCE)]):
+            result, _ = self.diagnostic([response(data)])
+            output = json.dumps(result)
+            for value in (PRIVATE_PHONE, SECRET, KEY, str(PRIVATE_BALANCE)):
+                self.assertNotIn(value, output)
+            self.assertNotIn('expireAt', output)
+            self.assertNotIn('phoneNumber', output)
+            self.assertNotIn('"count"', output)
+
     def test_workflow_manual_only_no_secrets_or_checkout_in_dry_run(self):
         import yaml  # Already-installed test utility, not a runtime requirement.
         workflow = yaml.safe_load((Path(__file__).resolve().parents[2] / ".github/workflows/solapi-status-readonly.yml").read_text())
