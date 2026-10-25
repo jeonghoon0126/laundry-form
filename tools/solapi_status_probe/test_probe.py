@@ -157,6 +157,15 @@ class ProbeTests(unittest.TestCase):
         self.assertEqual(result["checks"]["active_sender_listing"]["response_fields"], "verifiable")
         self.assertIs(result["specific_sender_verified"], False)
 
+    def test_optional_sender_expiry_does_not_infer_validity(self):
+        for sender in ({"phoneNumber": PRIVATE_PHONE, "status": "ACTIVE"},
+                       {"phoneNumber": PRIVATE_PHONE, "status": "ACTIVE", "expireAt": None}):
+            result, mock = self.execute([response(balance()), response([sender]), response(pricing())])
+            self.assertEqual(mock.calls, list(p.Endpoint))
+            self.assertEqual(result["checks"]["active_sender_listing"]["response_fields"], "verifiable")
+            self.assertIs(result["specific_sender_verified"], False)
+            self.assertIs(result["send_authorized"], False)
+
     def test_unknown_or_malformed_fields_remain_unverified(self):
         for endpoint, bad_values in ((p.Endpoint.BALANCE, ({}, {**balance(), "autoRecharge": "0"}, {**balance(), "balance": True})),
                                     (p.Endpoint.SENDERS, ({}, [None], [{**senders()[0], "status": "PENDING"}], [{**senders()[0], "expireAt": "not date"}])),

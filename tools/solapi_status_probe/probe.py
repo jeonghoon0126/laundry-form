@@ -203,8 +203,9 @@ def verifiable_fields(endpoint: Endpoint, data) -> bool:
             return False
         return all(type(item) is dict and type(item.get("phoneNumber")) is str
                    and re.fullmatch(r"[0-9]{8,12}", item["phoneNumber"]) is not None
-                   and item.get("status") == "ACTIVE" and "expireAt" in item
-                   and timestamp_or_null(item["expireAt"]) for item in data)
+                   and item.get("status") == "ACTIVE"
+                   and ("expireAt" not in item or timestamp_or_null(item["expireAt"]))
+                   for item in data)
     return False
 
 
