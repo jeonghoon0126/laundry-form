@@ -15,7 +15,7 @@ REVISION = "a" * 40
 
 
 def environment():
-    return {"GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": "workflow_dispatch",
+    return {"SOLAPI_STATUS_READ_TARGET": "standard_status", "GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": "workflow_dispatch",
         "GITHUB_REPOSITORY": p.REPOSITORY, "GITHUB_REF": p.REF,
         "GITHUB_WORKFLOW_REF": p.WORKFLOW_REF, "GITHUB_SHA": REVISION,
         "SOLAPI_STATUS_READ_ACK": p.ACK, "SOLAPI_STATUS_APPROVED_REVISION": REVISION,
@@ -108,7 +108,7 @@ class ProbeTests(unittest.TestCase):
                     raise AssertionError("must not read secrets")
                 return super().get(key, default)
         for field in ("GITHUB_ACTIONS", "GITHUB_EVENT_NAME", "GITHUB_REPOSITORY", "GITHUB_REF", "GITHUB_WORKFLOW_REF",
-                      "GITHUB_SHA", "SOLAPI_STATUS_READ_ACK", "SOLAPI_STATUS_APPROVED_REVISION"):
+                      "GITHUB_SHA", "SOLAPI_STATUS_READ_ACK", "SOLAPI_STATUS_APPROVED_REVISION", "SOLAPI_STATUS_READ_TARGET"):
             with self.subTest(field=field):
                 env = GuardMapping(environment())
                 env[field] = "wrong"
@@ -299,6 +299,157 @@ class ProbeTests(unittest.TestCase):
             with self.assertRaises(p.ProbeError) as caught:
                 p.HTTPSReadTransport().get(p.Endpoint.BALANCE, "HMAC-SHA256 FAKE_HEADER")
             self.assertNotIn(SECRET, str(caught.exception))
+
+    def diagnostic(self, values=None, env=None):
+        env = environment() if env is None else env
+        env['SOLAPI_STATUS_READ_TARGET'] = p.ReadTarget.SENDER_SCHEMA.value
+        mock = MockTransport(values if values is not None else [response(senders())])
+        result = p.run(execute_read_only=True, read_target=p.ReadTarget.SENDER_SCHEMA,
+                       environment_provider=lambda: env, transport_factory=lambda: mock,
+                       now_provider=lambda: NOW, salt_provider=self.salt)
+        return result, mock
+
+    def test_sender_diagnostic_exactly_one_get_and_no_scope_expansion(self):
+        for data in (senders(), [], {}):
+            result, mock = self.diagnostic([response(data)])
+            self.assertEqual(mock.calls, [p.Endpoint.SENDERS])
+            self.assertEqual(result['read_target'], 'sender_schema_diagnostic')
+            for name in ('balance_and_recharge', 'account_mms_pricing'):
+                self.assertEqual(result['checks'][name]['api_read'], 'not_run')
+            for name in ('specific_sender_verified', 'budget_verified', 'send_authorized',
+                         'spending_authorized', 'send_performed', 'upload_performed', 'account_changed'):
+                self.assertIs(result[name], False)
+
+    def test_sender_schema_reasons_are_only_fixed_enums(self):
+        item = senders()[0]
+        cases = [({}, 'root_type_unsupported'), ([None] * 1001, 'list_limit_exceeded'),
+                 ([None], 'item_type_unsupported'), ([{}], 'missing_required_field'),
+                 ([{**item, 'phoneNumber': None}], 'phone_type_unexpected'),
+                 ([{**item, 'phoneNumber': 'fake-not-a-number'}], 'phone_format_unexpected'),
+                 ([{**item, 'status': 'FAKE_OTHER_STATUS'}], 'status_value_unexpected'),
+                 ([{**item, 'expireAt': 'FAKE_NOT_A_DATE'}], 'expiry_format_unexpected'),
+                 ([], 'verified'), (senders(), 'verified')]
+        for data, expected in cases:
+            self.assertEqual(p.sender_schema_reason(data).value, expected)
+            result, _ = self.diagnostic([response(data)])
+            self.assertEqual(result['checks']['active_sender_listing']['schema_reason'], expected)
+
+    def test_sender_acceptance_conditions_match_previous_validator(self):
+        import itertools
+        def previous(data):
+            if type(data) is not list or len(data) > 1000:
+                return False
+            return all(type(item) is dict and type(item.get('phoneNumber')) is str
+                       and p.re.fullmatch(r'[0-9]{8,12}', item['phoneNumber']) is not None
+                       and item.get('status') == 'ACTIVE'
+                       and ('expireAt' not in item or p.timestamp_or_null(item['expireAt']))
+                       for item in data)
+        missing = object()
+        cases = [None, {}, [], [None], [None] * 1001]
+        for phone, status, expiry in itertools.product(
+                (missing, None, 0, '', '00000000', PRIVATE_PHONE, '0' * 13, '000-0000-0000'),
+                (missing, None, 'ACTIVE', 'FAKE_OTHER', 0, {}),
+                (missing, None, 0, '', '2027-01-01T00:00:00Z', '2027-01-01T00:00:00')):
+            item = {}
+            for name, value in (('phoneNumber', phone), ('status', status), ('expireAt', expiry)):
+                if value is not missing:
+                    item[name] = value
+            cases.append([item])
+        for data in cases:
+            self.assertEqual(p.sender_schema_reason(data) is p.SchemaReason.VERIFIED, previous(data))
+
+    def test_diagnostic_scope_guard_precedes_credentials(self):
+        class GuardMapping(dict):
+            def get(self, key, default=None):
+                if key in ('SOLAPI_API_KEY', 'SOLAPI_API_SECRET'):
+                    self.fail_if_secret_read = True
+                    raise AssertionError('secret read forbidden')
+                return super().get(key, default)
+        for target, mismatch in ((p.ReadTarget.SENDER_SCHEMA, 'standard_status'),
+                                 (p.ReadTarget.STANDARD, 'sender_schema_diagnostic'),
+                                 (p.ReadTarget.SENDER_SCHEMA, None)):
+            env = GuardMapping(environment())
+            env['SOLAPI_STATUS_READ_TARGET'] = mismatch
+            result = p.run(execute_read_only=True, read_target=target, environment_provider=lambda: env,
+                           transport_factory=lambda: self.fail('transport constructed'))
+            self.assertEqual(result['code'], 'ACTIVATION_GUARD_BLOCKED')
+            self.assertFalse(getattr(env, 'fail_if_secret_read', False))
+
+    def test_diagnostic_cannot_select_execution_without_literal_execute(self):
+        for execute in (False, None, 1, 'true'):
+            result = p.run(execute_read_only=execute, read_target=p.ReadTarget.SENDER_SCHEMA,
+                           environment_provider=lambda: self.fail('environment touched'))
+            self.assertEqual(result, p.default_report())
+        for target in (None, 'sender_schema_diagnostic', 1):
+            result = p.run(execute_read_only=True, read_target=target,
+                           environment_provider=lambda: self.fail('environment touched'))
+            self.assertEqual(result['code'], 'ACTIVATION_GUARD_BLOCKED')
+
+    def test_diagnostic_errors_never_retry_or_call_other_endpoints(self):
+        cases = [response({}, n) for n in (301, 307, 401, 403, 429, 500)]
+        cases += [p.Response(200, b'not-json'), response({'errorCode': SECRET}), TimeoutError(SECRET)]
+        for bad in cases:
+            result, mock = self.diagnostic([bad])
+            self.assertEqual(mock.calls, [p.Endpoint.SENDERS])
+            check = result['checks']['active_sender_listing']
+            self.assertEqual(check['schema_reason'], 'not_evaluated')
+            self.assertNotEqual(check['api_read'], 'succeeded')
+            self.assertEqual(result['checks']['account_mms_pricing']['api_read'], 'not_run')
+            self.assertNotIn(SECRET, json.dumps(result))
+
+    def test_diagnostic_never_emits_unknown_keys_values_or_exception_repr(self):
+        private = ['PRIVATE_ARBITRARY_SERVER_KEY', 'PRIVATE_SERVER_VALUE', SECRET, KEY,
+                   PRIVATE_PHONE, str(PRIVATE_BALANCE), 'PRIVATE_HEADER_SENTINEL']
+        cases = [{private[0]: private[1]},
+                 [{**senders()[0], 'status': private[1], private[0]: private[6]}],
+                 [{**senders()[0], 'phoneNumber': private[1]}],
+                 [{**senders()[0], 'expireAt': private[6]}]]
+        for data in cases:
+            result, _ = self.diagnostic([response(data)])
+            output = json.dumps(result)
+            for value in private:
+                self.assertNotIn(value, output)
+            self.assertNotIn('phoneNumber', output)
+            self.assertNotIn('expireAt', output)
+            self.assertNotIn('Authorization', output)
+        with patch('probe.timestamp_or_null', side_effect=ValueError(SECRET)):
+            result, _ = self.diagnostic()
+            self.assertEqual(result['checks']['active_sender_listing']['schema_reason'], 'validation_unconfirmed')
+            self.assertNotIn(SECRET, json.dumps(result))
+
+    def test_diagnostic_unexpected_reason_return_cannot_leak(self):
+        with patch('probe.sender_schema_reason', return_value=SECRET):
+            result, _ = self.diagnostic()
+            self.assertEqual(result['checks']['active_sender_listing']['schema_reason'], 'validation_unconfirmed')
+            self.assertNotIn(SECRET, json.dumps(result))
+
+    def test_diagnostic_reason_not_added_to_standard_output(self):
+        result, _ = self.execute()
+        self.assertNotIn('schema_reason', json.dumps(result))
+        self.assertNotIn('read_target', result)
+
+    def test_diagnostic_cli_exit_depends_on_sender_only(self):
+        result, _ = self.diagnostic()
+        with patch('probe.run', return_value=result) as run, patch('sys.stdout', new_callable=io.StringIO):
+            self.assertEqual(p.main(['--execute-sender-schema-diagnostic']), 0)
+            run.assert_called_once_with(execute_read_only=True, read_target=p.ReadTarget.SENDER_SCHEMA)
+        result, _ = self.diagnostic([response({})])
+        with patch('probe.run', return_value=result), patch('sys.stdout', new_callable=io.StringIO):
+            self.assertEqual(p.main(['--execute-sender-schema-diagnostic']), 2)
+
+    def test_workflow_diagnostic_scope_is_fixed_choice_and_guarded(self):
+        import yaml
+        workflow = yaml.safe_load((Path(__file__).resolve().parents[2] / '.github/workflows/solapi-status-readonly.yml').read_text())
+        target = workflow['on']['workflow_dispatch']['inputs']['read_target']
+        self.assertEqual(target['options'], ['standard_status', 'sender_schema_diagnostic'])
+        self.assertEqual(target['default'], 'standard_status')
+        job = workflow['jobs']['read_only']
+        self.assertIn("inputs.read_target == 'sender_schema_diagnostic'", job['if'])
+        step = job['steps'][1]
+        self.assertEqual(step['env']['SOLAPI_STATUS_READ_TARGET'], '${{ inputs.read_target }}')
+        self.assertIn('--execute-sender-schema-diagnostic', step['run'])
+        self.assertNotIn('${{', step['run'])
+        self.assertIn('*) exit 2', step['run'])
 
     def test_workflow_manual_only_no_secrets_or_checkout_in_dry_run(self):
         import yaml  # Already-installed test utility, not a runtime requirement.

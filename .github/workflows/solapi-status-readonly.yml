@@ -10,6 +10,14 @@ name: SOLAPI account status (manual read-only)
         type: boolean
         required: false
         default: false
+      read_target:
+        description: 'Standard status reads or one active-sender GET with fixed schema diagnostics'
+        type: choice
+        options:
+          - standard_status
+          - sender_schema_diagnostic
+        default: standard_status
+        required: false
       approved_revision:
         description: 'Full 40-character reviewed main commit SHA; no credentials or private data'
         type: string
@@ -52,6 +60,7 @@ jobs:
       ${{ inputs.execute_read_only == true &&
           inputs.authorization_ack == 'APPROVED_READ_ONLY_SOLAPI_STATUS' &&
           inputs.approved_revision == github.sha &&
+          (inputs.read_target == 'standard_status' || inputs.read_target == 'sender_schema_diagnostic') &&
           github.event_name == 'workflow_dispatch' &&
           github.repository == 'jeonghoon0126/laundry-form' &&
           github.ref == 'refs/heads/main' }}
@@ -68,14 +77,21 @@ jobs:
           fetch-depth: 1
           sparse-checkout: tools/solapi_status_probe
           sparse-checkout-cone-mode: true
-      - name: Read only the three approved SOLAPI status endpoints
+      - name: Read only the selected approved SOLAPI status scope
         # Existing secret NAMES only. No values were read to prepare this draft.
         env:
           SOLAPI_API_KEY: ${{ secrets.SOLAPI_API_KEY }}
           SOLAPI_API_SECRET: ${{ secrets.SOLAPI_API_SECRET }}
+          SOLAPI_STATUS_READ_TARGET: ${{ inputs.read_target }}
           SOLAPI_STATUS_READ_ACK: ${{ inputs.authorization_ack }}
           SOLAPI_STATUS_APPROVED_REVISION: ${{ inputs.approved_revision }}
         shell: bash
         run: |
           set +x
-          python3 -I -B tools/solapi_status_probe/probe.py --execute-read-only
+          case "$SOLAPI_STATUS_READ_TARGET" in
+            standard_status)
+              python3 -I -B tools/solapi_status_probe/probe.py --execute-read-only ;;
+            sender_schema_diagnostic)
+              python3 -I -B tools/solapi_status_probe/probe.py --execute-sender-schema-diagnostic ;;
+            *) exit 2 ;;
+          esac
