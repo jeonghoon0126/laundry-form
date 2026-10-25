@@ -35,6 +35,25 @@ class Endpoint(Enum):
     PRICING = "/pricing/v1/messaging?countryId=82&serviceMethod=MT&withoutProfit=false"
 
 
+class ReadTarget(Enum):
+    STANDARD = "standard_status"
+    SENDER_SCHEMA = "sender_schema_diagnostic"
+
+
+class SchemaReason(Enum):
+    NOT_EVALUATED = "not_evaluated"
+    VERIFIED = "verified"
+    ROOT_TYPE_UNSUPPORTED = "root_type_unsupported"
+    LIST_LIMIT_EXCEEDED = "list_limit_exceeded"
+    ITEM_TYPE_UNSUPPORTED = "item_type_unsupported"
+    MISSING_REQUIRED_FIELD = "missing_required_field"
+    PHONE_TYPE_UNEXPECTED = "phone_type_unexpected"
+    PHONE_FORMAT_UNEXPECTED = "phone_format_unexpected"
+    STATUS_UNEXPECTED = "status_value_unexpected"
+    EXPIRY_FORMAT_UNEXPECTED = "expiry_format_unexpected"
+    VALIDATION_UNCONFIRMED = "validation_unconfirmed"
+
+
 LABELS = {Endpoint.BALANCE: "balance_and_recharge", Endpoint.SENDERS: "active_sender_listing",
           Endpoint.PRICING: "account_mms_pricing"}
 
@@ -66,9 +85,11 @@ def default_report(mode="dry_run", code="NO_ACCOUNT_READS_PERFORMED") -> dict:
             "account_changed": False}
 
 
-def check_runtime(env: Mapping[str, str]) -> bool:
+def check_runtime(env: Mapping[str, str], read_target: ReadTarget = ReadTarget.STANDARD) -> bool:
     """An accident guard, NOT evidence that the user actually granted approval."""
-    expected = {"GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": "workflow_dispatch",
+    if type(read_target) is not ReadTarget:
+        return False
+    expected = {"SOLAPI_STATUS_READ_TARGET": read_target.value, "GITHUB_ACTIONS": "true", "GITHUB_EVENT_NAME": "workflow_dispatch",
                 "GITHUB_REPOSITORY": REPOSITORY, "GITHUB_REF": REF,
                 "GITHUB_WORKFLOW_REF": WORKFLOW_REF, "SOLAPI_STATUS_READ_ACK": ACK}
     if any(env.get(key) != value for key, value in expected.items()):
@@ -186,6 +207,36 @@ def timestamp_or_null(value) -> bool:
         return False
 
 
+
+def sender_schema_reason(data) -> SchemaReason:
+    """Same conservative acceptance conditions; only fixed, value-free enums.
+
+    Never return values, field names supplied by the server, counts, indexes,
+    lengths, headers, exceptions, or representations of data.
+    """
+    try:
+        if type(data) is not list:
+            return SchemaReason.ROOT_TYPE_UNSUPPORTED
+        if len(data) > 1000:
+            return SchemaReason.LIST_LIMIT_EXCEEDED
+        for item in data:
+            if type(item) is not dict:
+                return SchemaReason.ITEM_TYPE_UNSUPPORTED
+            if "phoneNumber" not in item or "status" not in item:
+                return SchemaReason.MISSING_REQUIRED_FIELD
+            if type(item["phoneNumber"]) is not str:
+                return SchemaReason.PHONE_TYPE_UNEXPECTED
+            if re.fullmatch(r"[0-9]{8,12}", item["phoneNumber"]) is None:
+                return SchemaReason.PHONE_FORMAT_UNEXPECTED
+            if item["status"] != "ACTIVE":
+                return SchemaReason.STATUS_UNEXPECTED
+            if "expireAt" in item and not timestamp_or_null(item["expireAt"]):
+                return SchemaReason.EXPIRY_FORMAT_UNEXPECTED
+        return SchemaReason.VERIFIED
+    except Exception:
+        return SchemaReason.VALIDATION_UNCONFIRMED
+
+
 def verifiable_fields(endpoint: Endpoint, data) -> bool:
     """Schema/presence only. Do NOT output or infer the actual private setting."""
     if endpoint is Endpoint.BALANCE:
@@ -199,18 +250,15 @@ def verifiable_fields(endpoint: Endpoint, data) -> bool:
         return (type(data) is dict and data.get("countryId") == "82"
                 and data.get("serviceMethod") == "MT" and number(data.get("mms")) and data["mms"] > 0)
     if endpoint is Endpoint.SENDERS:
-        if type(data) is not list or len(data) > 1000:
-            return False
-        return all(type(item) is dict and type(item.get("phoneNumber")) is str
-                   and re.fullmatch(r"[0-9]{8,12}", item["phoneNumber"]) is not None
-                   and item.get("status") == "ACTIVE"
-                   and ("expireAt" not in item or timestamp_or_null(item["expireAt"]))
-                   for item in data)
+        return sender_schema_reason(data) is SchemaReason.VERIFIED
     return False
 
 
-def classify(endpoint: Endpoint, response: Response) -> dict:
+def classify(endpoint: Endpoint, response: Response, *, schema_diagnostic=False) -> dict:
     result = {"api_read": "unconfirmed", "response_fields": "unverified"}
+    diagnostic = schema_diagnostic is True and endpoint is Endpoint.SENDERS
+    if diagnostic:
+        result["schema_reason"] = SchemaReason.NOT_EVALUATED.value
     if type(response) is not Response or type(response.status) is not int:
         return result
     if response.status in (401, 403):
@@ -222,27 +270,44 @@ def classify(endpoint: Endpoint, response: Response) -> dict:
         if data is not None and not (type(data) is dict and "errorCode" in data):
             result["api_read"] = "succeeded"
             try:
-                valid = verifiable_fields(endpoint, data)
+                if diagnostic:
+                    reason = sender_schema_reason(data)
+                    # Defend the public surface against unexpected return types.
+                    if type(reason) is not SchemaReason:
+                        reason = SchemaReason.VALIDATION_UNCONFIRMED
+                    result["schema_reason"] = reason.value
+                    valid = reason is SchemaReason.VERIFIED
+                else:
+                    valid = verifiable_fields(endpoint, data)
             except (TypeError, ValueError, OverflowError, RecursionError):
                 valid = False
+                if diagnostic:
+                    result["schema_reason"] = SchemaReason.VALIDATION_UNCONFIRMED.value
             if valid:
                 result["response_fields"] = "verifiable"
     return result
 
 
-def run(*, execute_read_only=False, environment_provider: Callable | None = None,
+def run(*, execute_read_only=False, read_target: ReadTarget = ReadTarget.STANDARD,
+        environment_provider: Callable | None = None,
         transport_factory: Callable | None = None, now_provider: Callable | None = None,
         salt_provider: Callable | None = None) -> dict:
     if execute_read_only is not True:
         return default_report()  # Before environment/credentials/clock/TLS/network.
     report = default_report("read_only_diagnostic", "ACTIVATION_GUARD_BLOCKED")
+    if type(read_target) is not ReadTarget:
+        return report
+    diagnostic = read_target is ReadTarget.SENDER_SCHEMA
+    if diagnostic:
+        report["read_target"] = ReadTarget.SENDER_SCHEMA.value
+        report["checks"][LABELS[Endpoint.SENDERS]]["schema_reason"] = SchemaReason.NOT_EVALUATED.value
     try:
         if environment_provider is None:
             import os
             env = os.environ
         else:
             env = environment_provider()
-        if not check_runtime(env):
+        if not check_runtime(env, read_target):
             return report
         credentials = credential_values(env)
         transport = transport_factory() if transport_factory else HTTPSReadTransport()
@@ -251,7 +316,8 @@ def run(*, execute_read_only=False, environment_provider: Callable | None = None
         # No endpoint repeat. Any failure or unverifiable schema stops this
         # diagnostic without expanding into further requests.
         used_salts = set()
-        for endpoint in Endpoint:
+        selected_endpoints = (Endpoint.SENDERS,) if diagnostic else tuple(Endpoint)
+        for endpoint in selected_endpoints:
             try:
                 salt = salt_provider()
                 if type(salt) is not str or salt in used_salts:
@@ -259,9 +325,11 @@ def run(*, execute_read_only=False, environment_provider: Callable | None = None
                 used_salts.add(salt)
                 auth = sign(credentials, now_provider(), salt)
                 response = transport.get(endpoint, auth)
-                check = classify(endpoint, response)
+                check = classify(endpoint, response, schema_diagnostic=diagnostic)
             except Exception:
                 check = {"api_read": "unconfirmed", "response_fields": "unverified"}
+                if diagnostic:
+                    check["schema_reason"] = SchemaReason.NOT_EVALUATED.value
             report["checks"][LABELS[endpoint]] = check
             if check["api_read"] != "succeeded" or check["response_fields"] != "verifiable":
                 break
@@ -280,16 +348,20 @@ def main(argv=None) -> int:
         report = run()
     elif arguments == ["--execute-read-only"]:
         report = run(execute_read_only=True)
+    elif arguments == ["--execute-sender-schema-diagnostic"]:
+        report = run(execute_read_only=True, read_target=ReadTarget.SENDER_SCHEMA)
     elif arguments == ["--help"]:
-        print("Default: offline dry-run. --execute-read-only: future approved GitHub runtime only.")
+        print("Default: offline dry-run. Explicit read modes require approved GitHub runtime guards.")
         return 0
     else:
         report = default_report(code="INVALID_ARGUMENTS_OR_UNVERIFIED_RUNTIME")
     print(json.dumps(report, ensure_ascii=True, sort_keys=True))
     if report["mode"] == "dry_run":
         return 0 if report["code"] == "NO_ACCOUNT_READS_PERFORMED" else 2
+    selected = ([report["checks"][LABELS[Endpoint.SENDERS]]]
+                if arguments == ["--execute-sender-schema-diagnostic"] else report["checks"].values())
     return 0 if all(v["api_read"] == "succeeded" and v["response_fields"] == "verifiable"
-                    for v in report["checks"].values()) else 2
+                    for v in selected) else 2
 
 
 if __name__ == "__main__":
