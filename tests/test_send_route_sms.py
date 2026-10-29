@@ -165,6 +165,38 @@ class SendRouteSmsTests(unittest.TestCase):
         self.assertIn("왕산로 200, 1004호", august_thursday)
         self.assertNotIn("청량리는 다음 일정", august_body)
 
+    def test_wangsanro_switches_to_weekly_monday_from_november_2(self):
+        for day, included in [(date(2026, 10, 29), True),
+                              (date(2026, 11, 2), True),
+                              (date(2026, 11, 5), False),
+                              (date(2026, 11, 9), True),
+                              (date(2026, 11, 12), False)]:
+            with self.subTest(day=day):
+                route = self.sms.get_route(day)
+                self.assertEqual(self.sms.WANGSANRO_KEY in route, included)
+
+    def test_thursday_notes_point_to_the_immediately_following_monday(self):
+        for day, expected in [(date(2026, 11, 5), "청량리는 다음 일정 11/9(월)"),
+                              (date(2026, 11, 12), "청량리는 다음 일정 11/16(월)")]:
+            with self.subTest(day=day):
+                _, body = self.sms.build_message(day, self.sms.get_route(day))
+                self.assertIn(expected, body)
+
+    def test_november_change_preserves_other_stops_and_order(self):
+        expected = ["봉은사로37길 8", "가락로28길 3-10", "능동로 165-1",
+                    "회기로 189", "고산자로 508-3", "장충단로 225",
+                    "회나무로 50", "연희로4길 25-7", "통일로 863-10"]
+        for day in [date(2026, 10, 29), date(2026, 11, 2), date(2026, 11, 5),
+                    date(2026, 11, 9), date(2026, 11, 12)]:
+            with self.subTest(day=day):
+                route = self.sms.get_route(day)
+                self.assertEqual([key for key in route if key != self.sms.WANGSANRO_KEY], expected)
+                if self.sms.WANGSANRO_KEY in route:
+                    self.assertEqual(route[3], self.sms.WANGSANRO_KEY)
+                    self.assertNotIn("청량리는 다음 일정", self.sms.build_message(day, route)[1])
+        self.assertEqual(self.sms.get_route(date(2026, 11, 3)), [])
+        self.assertEqual(self.sms.get_route(date(2026, 11, 7)), [self.sms.JANGCHUNG_KEY])
+
     def test_wangsanro_biweekly_schedule_is_preserved_before_july_override(self):
         june_first_monday = self.sms.get_route(date(2026, 6, 1))
         june_second_monday = self.sms.get_route(date(2026, 6, 8))
