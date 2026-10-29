@@ -288,7 +288,7 @@ def build_message(today: date, route: list[str]) -> tuple[str, str]:
         lines.append("")
         lines.extend(notes)
 
-    lines.extend(["", "안전 운전하시고 감사합니다!"])
+    lines.extend(["", "기사님, 수거 동선에 안내된 숙소는 빠짐없이 방문해 주시고, 검은 가방도 모두 수거해 주시면 감사하겠습니다.", "", "안전 운전하시고 감사합니다!"])
     return subject, "\n".join(lines)
 
 
