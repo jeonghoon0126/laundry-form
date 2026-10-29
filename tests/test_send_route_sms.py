@@ -76,6 +76,15 @@ class SendRouteSmsTests(unittest.TestCase):
             "가락로28길 3-10",
         ])
 
+    def test_driver_pickup_request_is_in_each_scheduled_message(self):
+        request = "기사님, 수거 동선에 안내된 숙소는 빠짐없이 방문해 주시고, 검은 가방도 모두 수거해 주시면 감사하겠습니다."
+        for day in (date(2026, 11, 2), date(2026, 11, 5), date(2026, 11, 7)):
+            with self.subTest(day=day):
+                route = self.sms.get_route(day)
+                _, body = self.sms.build_message(day, route)
+                self.assertEqual(body.count(request), 1)
+                self.assertIn("안전 운전하시고 감사합니다!", body)
+
     def test_saturday_route_contains_only_jangchung(self):
         self.assertEqual(self.sms.get_route(date(2026, 8, 19)), [])
         self.assertEqual(
