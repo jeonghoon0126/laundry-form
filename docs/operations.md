@@ -11,7 +11,7 @@
 
 ## 주요 스크립트
 
-- `scripts/generate_invoices.py`: 월말 정산 자동 실행
+- `scripts/generate_invoices.py`: 매월 28일 정산 마감 자동 실행 (2026-10-29부터 매월 28일 마감 적용: 전달 29일~당월 28일 집계)
 - `scripts/send_weekly_revenue_report.py`: 지난 월~일 주별 매출 보고 이메일 발송
 - `scripts/send_route_sms.py`: 캐리 동선 문자 본문 생성과 발송
 - `scripts/dispatch_route_sms.py`: exact 10:00 디스패처와 같은 날 중복 발송 가드

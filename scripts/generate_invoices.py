@@ -104,6 +104,8 @@ ITAEWON_SETTLEMENT_START_DATE = date(2026, 8, 1)
 EUNPYEONG_LOCATION = '은평구 통일로 863-10'
 EUNPYEONG_SETTLEMENT_START_DATE = date(2026, 9, 7)
 LAST_DAY_CARRYOVER_START_DATE = date(2026, 4, 30)
+SETTLEMENT_CUTOFF_DAY = 28
+CUTOFF_28TH_START_DATE = date(2026, 10, 29)
 
 ITEM_NAMES = {
     'blanket': '이불',
@@ -252,6 +254,20 @@ def is_settlement_location_active(location: str, record_date: date) -> bool:
 
 def get_settlement_period(year: int, month: int) -> tuple[date, date]:
     """정산 대상 기간 반환: 시작일 포함, 종료일 제외"""
+    # 2026년 11월부터는 매월 28일 마감 (전달 29일 ~ 당월 28일)
+    if (year, month) > (2026, 10):
+        if month == 1:
+            prev_year, prev_month = year - 1, 12
+        else:
+            prev_year, prev_month = year, month - 1
+        start_date = date(prev_year, prev_month, SETTLEMENT_CUTOFF_DAY) + timedelta(days=1)
+        end_exclusive = date(year, month, SETTLEMENT_CUTOFF_DAY) + timedelta(days=1)
+        return start_date, end_exclusive
+
+    # 2026년 10월은 28일 마감 전환월: 9/30 ~ 10/28 (10/29 이후 작업분은 11월로 이월)
+    if (year, month) == (2026, 10):
+        return date(2026, 9, 30), date(2026, 10, 29)
+
     month_start = date(year, month, 1)
     month_last_day = calendar.monthrange(year, month)[1]
     month_last_date = date(year, month, month_last_day)
@@ -272,6 +288,14 @@ def get_settlement_period(year: int, month: int) -> tuple[date, date]:
 
 def get_record_settlement_month(record_date: date) -> tuple[int, int]:
     """세탁 기록 1건이 속하는 정산 월 반환"""
+    # 2026년 10월 29일부터는 28일 마감: 29일 이후 기록은 익월 정산에 포함
+    if record_date >= CUTOFF_28TH_START_DATE:
+        if record_date.day > SETTLEMENT_CUTOFF_DAY:
+            if record_date.month == 12:
+                return record_date.year + 1, 1
+            return record_date.year, record_date.month + 1
+        return record_date.year, record_date.month
+
     last_day = calendar.monthrange(record_date.year, record_date.month)[1]
     if record_date >= LAST_DAY_CARRYOVER_START_DATE and record_date.day == last_day:
         if record_date.month == 12:
@@ -1098,9 +1122,12 @@ def generate_excel(business_data: dict, year: int, month: int) -> BytesIO:
                '공급받는자 대표자', '공급가액', '세액', '합계금액', '품목']
     ws.append(headers)
 
-    # 작성일자 (해당 월 말일)
-    last_day = calendar.monthrange(year, month)[1]
-    write_date = f"{year}{month:02d}{last_day:02d}"
+    # 작성일자 (28일 마감 적용 시 28일, 이전은 해당 월 말일)
+    if (year, month) >= (2026, 10):
+        write_day = SETTLEMENT_CUTOFF_DAY
+    else:
+        write_day = calendar.monthrange(year, month)[1]
+    write_date = f"{year}{month:02d}{write_day:02d}"
 
     for reg_no, data in business_data.items():
         # 총액 계산
@@ -1933,11 +1960,10 @@ def get_invoice_job_mode() -> str:
 
 
 def main():
-    # 대상 월 결정 (실행일이 말일이면 해당 월, 아니면 전월)
+    # 대상 월 결정 (실행일이 28일이면 해당 월, 아니면 전월)
     today = date.today()
-    last_day = calendar.monthrange(today.year, today.month)[1]
 
-    if today.day == last_day:
+    if today.day == SETTLEMENT_CUTOFF_DAY:
         year, month = today.year, today.month
     else:
         # 테스트용: 전월 데이터
