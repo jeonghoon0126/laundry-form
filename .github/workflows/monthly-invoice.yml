@@ -2,9 +2,10 @@ name: Monthly Invoice Generation
 
 on:
   schedule:
-    # 매월 28-31일 09시 (KST) = UTC 00:00
-    # 스크립트에서 말일인지 체크
-    - cron: '0 0 28-31 * *'
+    # 매월 29일 00시 (KST) = UTC 28일 15:00
+    # 28일 마감분(28일 하루 전체 포함)을 빠짐없이 정산하기 위해 KST 자정 직후 실행
+    # 러너 시간(UTC) 기준으로는 28일이므로 check_day와 generate_invoices.py의 28일 판정이 그대로 맞음
+    - cron: '0 15 28 * *'
   workflow_dispatch:
     inputs:
       year:
@@ -35,18 +36,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check if last day of month
+      - name: Check if 28th of month
         id: check_day
         run: |
-          # 오늘이 말일인지 체크
+          # 오늘이 28일인지 체크
           today=$(date +%d)
-          last_day=$(date -d "$(date +%Y-%m-01) +1 month -1 day" +%d)
 
-          if [ "$today" = "$last_day" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "$today" = "28" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "run=true" >> $GITHUB_OUTPUT
           else
             echo "run=false" >> $GITHUB_OUTPUT
-            echo "오늘($today)은 말일($last_day)이 아님. 스킵."
+            echo "오늘($today)은 28일이 아님. 스킵."
           fi
 
       - name: Set up Python
