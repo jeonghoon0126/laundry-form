@@ -1,9 +1,11 @@
 import importlib.util
+from datetime import date
 import os
 from pathlib import Path
 import sys
 import unittest
 from unittest.mock import patch
+import openpyxl
 
 
 def load_generate_invoices():
@@ -482,6 +484,72 @@ class ProfitSummaryTests(unittest.TestCase):
         self.assertEqual(values_by_range[f"'{sheet_name}'!B17"], "솜 이불")
         self.assertEqual(values_by_range[f"'{sheet_name}'!F16"], 1_100)
         self.assertEqual(values_by_range[f"'{sheet_name}'!F17"], 15_000)
+
+    def test_settlement_period_28th_cutoff(self):
+        # 2026년 10월 전환월: 9/30 ~ 10/28
+        start, end_exc = self.gi.get_settlement_period(2026, 10)
+        self.assertEqual(start, date(2026, 9, 30))
+        self.assertEqual(end_exc, date(2026, 10, 29))
+        self.assertEqual(self.gi.format_settlement_period(2026, 10), "9/30~10/28")
+
+        # 2026년 11월: 10/29 ~ 11/28
+        start, end_exc = self.gi.get_settlement_period(2026, 11)
+        self.assertEqual(start, date(2026, 10, 29))
+        self.assertEqual(end_exc, date(2026, 11, 29))
+        self.assertEqual(self.gi.format_settlement_period(2026, 11), "10/29~11/28")
+
+        # 2026년 12월: 11/29 ~ 12/28
+        start, end_exc = self.gi.get_settlement_period(2026, 12)
+        self.assertEqual(start, date(2026, 11, 29))
+        self.assertEqual(end_exc, date(2026, 12, 29))
+        self.assertEqual(self.gi.format_settlement_period(2026, 12), "11/29~12/28")
+
+        # 2027년 1월 (연도 전환): 12/29 ~ 1/28
+        start, end_exc = self.gi.get_settlement_period(2027, 1)
+        self.assertEqual(start, date(2026, 12, 29))
+        self.assertEqual(end_exc, date(2027, 1, 29))
+        self.assertEqual(self.gi.format_settlement_period(2027, 1), "12/29~1/28")
+
+    def test_record_settlement_month_28th_cutoff(self):
+        # 10월 28일까지는 10월
+        self.assertEqual(self.gi.get_record_settlement_month(date(2026, 10, 28)), (2026, 10))
+        # 10월 29일 이후 작업분은 11월로 이월
+        self.assertEqual(self.gi.get_record_settlement_month(date(2026, 10, 29)), (2026, 11))
+        self.assertEqual(self.gi.get_record_settlement_month(date(2026, 10, 30)), (2026, 11))
+        self.assertEqual(self.gi.get_record_settlement_month(date(2026, 10, 31)), (2026, 11))
+        # 11월 1일~28일은 11월
+        self.assertEqual(self.gi.get_record_settlement_month(date(2026, 11, 1)), (2026, 11))
+        self.assertEqual(self.gi.get_record_settlement_month(date(2026, 11, 28)), (2026, 11))
+        # 11월 29일은 12월
+        self.assertEqual(self.gi.get_record_settlement_month(date(2026, 11, 29)), (2026, 12))
+        # 12월 29일은 2027년 1월
+        self.assertEqual(self.gi.get_record_settlement_month(date(2026, 12, 29)), (2027, 1))
+
+    def test_historical_settlement_periods_preserved(self):
+        # 2026년 6월 (기존 말일 이월 규칙): 5/31 ~ 6/29
+        start, end_exc = self.gi.get_settlement_period(2026, 6)
+        self.assertEqual(start, date(2026, 5, 31))
+        self.assertEqual(end_exc, date(2026, 6, 30))
+        self.assertEqual(self.gi.format_settlement_period(2026, 6), "5/31~6/29")
+
+        # 2026년 3월 (말일 이월 규칙 이전): 3/01 ~ 3/31
+        start, end_exc = self.gi.get_settlement_period(2026, 3)
+        self.assertEqual(start, date(2026, 3, 1))
+        self.assertEqual(end_exc, date(2026, 4, 1))
+        self.assertEqual(self.gi.format_settlement_period(2026, 3), "3/01~3/31")
+
+    def test_generate_excel_write_date_28th_cutoff(self):
+        business_data = {
+            '554-88-03481': {
+                'name': '주식회사 모어브릿지',
+                'owner': '홍석화',
+                'locations': {'중구 장충단로 225': {'towel': 10}},
+            }
+        }
+        excel_buffer = self.gi.generate_excel(business_data, 2026, 11)
+        wb = openpyxl.load_workbook(excel_buffer)
+        ws = wb["세금계산서"]
+        self.assertEqual(ws.cell(row=2, column=1).value, "20261128")
 
 
 if __name__ == "__main__":

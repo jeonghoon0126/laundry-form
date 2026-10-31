@@ -6,7 +6,7 @@
 
 ## 스크립트
 
-- scripts/generate_invoices.py — 월말 정산 자동 실행 (매월 말일 12시 KST)
+- scripts/generate_invoices.py — 정산 자동 실행 (매월 28일 09시 KST, 전달 29일~당월 28일 집계)
 - scripts/send_route_sms.py — 캐리 동선 문자 본문 생성/발송
 - scripts/dispatch_route_sms.py — exact 10:00 디스패처 + 같은 날 중복 발송 가드
 
