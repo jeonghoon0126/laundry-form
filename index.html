@@ -1246,40 +1246,59 @@
         return;
       }
 
-      container.innerHTML = records.map(r => `
-        <div class="record-card">
+      container.replaceChildren();
+      records.forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'record-card';
+        // Only constant markup belongs here. Database values are untrusted text.
+        card.innerHTML = `
           <div class="record-header">
-            <div class="record-meta">
-              <span class="record-date">${r.record_date}</span>
-            </div>
+            <div class="record-meta"><span class="record-date"></span></div>
             <div class="record-location">
               <span class="material-icons-round">location_on</span>
-              ${r.location}
+              <span class="record-location-text"></span>
             </div>
           </div>
           <div class="record-body">
-            <div class="record-items">
-              ${r.blanket > 0 ? `<div class="record-item">이불 <span class="count">${r.blanket}</span></div>` : ''}
-              ${r.mat > 0 ? `<div class="record-item">매트 <span class="count">${r.mat}</span></div>` : ''}
-              ${r.pillow_cover > 0 ? `<div class="record-item">베개커버 <span class="count">${r.pillow_cover}</span></div>` : ''}
-              ${r.towel > 0 ? `<div class="record-item">타올 <span class="count">${r.towel}</span></div>` : ''}
-              ${r.body_towel > 0 ? `<div class="record-item">바디타올 <span class="count">${r.body_towel}</span></div>` : ''}
-              ${r.pillow_fill > 0 ? `<div class="record-item">배게 솜 <span class="count">${r.pillow_fill}</span></div>` : ''}
-              ${r.cotton_blanket > 0 ? `<div class="record-item">솜 이불 <span class="count">${r.cotton_blanket}</span></div>` : ''}
-            </div>
+            <div class="record-items"></div>
             <div class="record-actions">
-              <button class="action-btn edit" onclick="openEditModal(${r.id}, '${r.record_date}', '${r.location}', ${r.blanket}, ${r.mat}, ${r.pillow_cover}, ${r.towel}, ${r.body_towel || 0}, ${r.pillow_fill || 0}, ${r.cotton_blanket || 0})">
-                <span class="material-icons-round">edit</span>
-                수정
+              <button class="action-btn edit" type="button">
+                <span class="material-icons-round">edit</span> 수정
               </button>
-              <button class="action-btn delete" onclick="openDeleteModal(${r.id})">
-                <span class="material-icons-round">delete_outline</span>
-                삭제
+              <button class="action-btn delete" type="button">
+                <span class="material-icons-round">delete_outline</span> 삭제
               </button>
             </div>
           </div>
-        </div>
-      `).join('');
+        `;
+        card.querySelector('.record-date').textContent = r.record_date ?? '';
+        card.querySelector('.record-location-text').textContent = r.location ?? '';
+        const itemContainer = card.querySelector('.record-items');
+        [
+          ['blanket', '이불'], ['mat', '매트'], ['pillow_cover', '베개커버'],
+          ['towel', '타올'], ['body_towel', '바디타올'],
+          ['pillow_fill', '배게 솜'], ['cotton_blanket', '솜 이불']
+        ].forEach(([key, label]) => {
+          if (!(r[key] > 0)) return;
+          const item = document.createElement('div');
+          item.className = 'record-item';
+          item.append(document.createTextNode(label + ' '));
+          const count = document.createElement('span');
+          count.className = 'count';
+          count.textContent = r[key];
+          item.append(count);
+          itemContainer.append(item);
+        });
+        card.querySelector('.action-btn.edit').addEventListener('click', () => {
+          openEditModal(r.id, r.record_date, r.location, r.blanket, r.mat,
+            r.pillow_cover, r.towel, r.body_towel || 0,
+            r.pillow_fill || 0, r.cotton_blanket || 0);
+        });
+        card.querySelector('.action-btn.delete').addEventListener('click', () => {
+          openDeleteModal(r.id);
+        });
+        container.append(card);
+      });
     }
 
     function openEditModal(id, date, location, blanket, mat, pillow, towel, bodyTowel, pillowFill, cottonBlanket) {
