@@ -35,8 +35,14 @@ from openpyxl import Workbook
 # ============================================================
 
 # Supabase 연결 정보 (strip으로 공백/줄바꿈 제거)
-SUPABASE_URI = os.environ.get('SUPABASE_URI',
-    "postgresql://postgres.xlbckmqdzzkwtboscjgr:pmjeonghoon4189@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require").strip()
+SUPABASE_URI = os.environ.get('SUPABASE_URI', '').strip()
+
+
+def require_supabase_uri():
+    """Fail closed before a database connection when the secret is missing."""
+    if not SUPABASE_URI:
+        raise RuntimeError("SUPABASE_URI must be configured in the runtime secret store")
+    return SUPABASE_URI
 
 # 이메일 설정
 EMAIL_FROM = "kham0126@gmail.com"
@@ -861,7 +867,7 @@ def calculate_record_amount(row: tuple) -> int:
 def get_monthly_data(year: int, month: int) -> list:
     """해당 월의 세탁물 데이터 조회"""
     start_date, end_exclusive = get_settlement_period(year, month)
-    conn = psycopg2.connect(SUPABASE_URI)
+    conn = psycopg2.connect(require_supabase_uri())
     cur = conn.cursor()
 
     cur.execute("""
@@ -1209,7 +1215,7 @@ def _get_6month_trend(year: int, month: int) -> list:
     months.reverse()  # 오래된 순서로
 
     try:
-        conn = psycopg2.connect(SUPABASE_URI)
+        conn = psycopg2.connect(require_supabase_uri())
         cur = conn.cursor()
         start_y, start_m = months[0]
         start_date, _ = get_settlement_period(start_y, start_m)

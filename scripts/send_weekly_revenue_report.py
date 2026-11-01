@@ -45,7 +45,7 @@ def format_period(start: date, end_exclusive: date) -> str:
 
 def get_weekly_rows(start: date, end_exclusive: date) -> list[tuple]:
     """주간 세탁 기록을 조회한다."""
-    conn = psycopg2.connect(gi.SUPABASE_URI)
+    conn = psycopg2.connect(gi.require_supabase_uri())
     cur = conn.cursor()
     cur.execute(
         """
